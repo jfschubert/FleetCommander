@@ -1,6 +1,6 @@
-"""Reine Geometrie: Rechtecke, Abzüge (Panels/Ränder) und Raster-Berechnung.
+"""Pure geometry: rectangles, insets (panels/margins) and grid computation.
 
-Keine Abhängigkeit zu Backends – dadurch einfach testbar.
+No dependency on backends – hence easy to test.
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ class Rect:
 
 @dataclass(frozen=True)
 class Insets:
-    """Abstände in Pixel (für Panel-Reservierung, Rand-Padding, Dekoration)."""
+    """Distances in pixels (for panel reservation, edge padding, decoration)."""
     top: int = 0
     right: int = 0
     bottom: int = 0
@@ -48,7 +48,7 @@ class Insets:
         if isinstance(value, dict):
             return cls(int(value.get("top", 0)), int(value.get("right", 0)),
                        int(value.get("bottom", 0)), int(value.get("left", 0)))
-        raise ValueError(f"Ungültige Insets-Angabe: {value!r}")
+        raise ValueError(f"invalid insets value: {value!r}")
 
     def apply(self, r: Rect) -> Rect:
         return r.shrink(self.top, self.right, self.bottom, self.left)
@@ -60,7 +60,7 @@ class GridSpec:
     rows: int = 1
     col_weights: tuple[float, ...] = field(default=())
     row_weights: tuple[float, ...] = field(default=())
-    # eigene Spaltenaufteilung einzelner Zeilen: ((zeile, (gewichte…)), …) – z. B. Zeile 1 = 75:25
+    # custom column split for individual rows: ((row, (weights…)), …) – e.g. row 1 = 75:25
     row_col_weights: tuple[tuple[int, tuple[float, ...]], ...] = field(default=())
 
     def cols_for_row(self, row: int) -> tuple[float, ...]:
@@ -68,7 +68,7 @@ class GridSpec:
 
     @classmethod
     def parse(cls, value) -> "GridSpec":
-        """Akzeptiert "2x2" (Spalten x Zeilen), [2, 2] oder ein Dict mit Gewichten."""
+        """Accepts "2x2" (columns x rows), [2, 2] or a dict with weights."""
         if isinstance(value, GridSpec):
             return value
         if isinstance(value, str):
@@ -87,7 +87,7 @@ class GridSpec:
             checks += [(f"row_col_weights[{r}]", w, cols) for r, w in per_row]
             for name, ws, n in checks:
                 if ws and len(ws) != n:
-                    raise ValueError(f"{name} braucht {n} Einträge, hat {len(ws)}")
+                    raise ValueError(f"{name} needs {n} entries, got {len(ws)}")
             return spec
         raise ConfigError("invalid_grid", value=value)
 
@@ -102,7 +102,7 @@ class GridSpec:
         return tuple(round(w / total, 4) for w in weights)
 
     def same_as(self, other: "GridSpec") -> bool:
-        """Gleiches Raster, unabhängig davon, wie die Gewichte notiert sind ([2, 1] == [66.7, 33.3])."""
+        """Same grid regardless of how the weights are written ([2, 1] == [66.7, 33.3])."""
         return ((self.cols, self.rows) == (other.cols, other.rows)
                 and all(self._norm(self.cols_for_row(r), self.cols) == self._norm(other.cols_for_row(r), other.cols)
                         for r in range(self.rows))
@@ -114,9 +114,9 @@ class GridSpec:
 
 
 def _edges(total: int, n: int, gap: int, weights: tuple[float, ...]) -> list[tuple[int, int]]:
-    """Teilt `total` Pixel in n Segmente (Offset, Länge) mit `gap` dazwischen.
+    """Splits `total` pixels into n segments (offset, length) with `gap` between them.
 
-    Rundung über kumulierte Kanten, damit keine Pixel verloren gehen.
+    Rounding via cumulative edges so no pixels are lost.
     """
     weights = weights or (1.0,) * n
     avail = max(0, total - gap * (n - 1))
@@ -129,17 +129,17 @@ def _edges(total: int, n: int, gap: int, weights: tuple[float, ...]) -> list[tup
 
 
 def grid_cells(area: Rect, grid: GridSpec, gap: int = 0) -> list[Rect]:
-    """Alle Zellen eines Rasters, zeilenweise nummeriert (0 = oben links)."""
+    """All cells of a grid, numbered row by row (0 = top left)."""
     rows = _edges(area.h, grid.rows, gap, grid.row_weights)
     out = []
-    for r, (ry, rh) in enumerate(rows):   # jede Zeile kann ihre eigene Spaltenaufteilung haben
+    for r, (ry, rh) in enumerate(rows):   # each row can have its own column split
         out += [Rect(area.x + cx, area.y + ry, cw, rh)
                 for (cx, cw) in _edges(area.w, grid.cols, gap, grid.cols_for_row(r))]
     return out
 
 
 def span_cells(cells: list[Rect], grid: GridSpec, slot: int, span: tuple[int, int] = (1, 1)) -> Rect:
-    """Rechteck, das ab `slot` über `span` = (Spalten, Zeilen) Zellen reicht."""
+    """Rectangle spanning `span` = (columns, rows) cells starting at `slot`."""
     if not 0 <= slot < grid.slot_count:
         raise ConfigError("slot_missing", slot=slot, cols=grid.cols, rows=grid.rows)
     c0, r0 = slot % grid.cols, slot // grid.cols
@@ -151,6 +151,12 @@ def span_cells(cells: list[Rect], grid: GridSpec, slot: int, span: tuple[int, in
     return Rect(first.x, first.y, last.x + last.w - first.x, last.y + last.h - first.y)
 
 
+def center_in(zone: Rect, size: Rect) -> Rect:
+    """Rectangle of size `size` (at most as large as `zone`), centered in `zone`."""
+    w, h = min(size.w, zone.w), min(size.h, zone.h)
+    return Rect(zone.x + (zone.w - w) // 2, zone.y + (zone.h - h) // 2, w, h)
+
+
 def strip_decoration(frame: Rect, deco: Insets) -> Rect:
-    """Frame-Rechteck -> Client-Rechteck (für Backends, die Client-Geometrie setzen)."""
+    """Frame rectangle -> client rectangle (for backends that set client geometry)."""
     return deco.apply(frame)

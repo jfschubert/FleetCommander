@@ -1,9 +1,9 @@
-"""Web-UI auf Basis der Standardbibliothek (http.server).
+"""Web UI based on the standard library (http.server).
 
-Lauscht standardmässig nur auf 127.0.0.1 – die API kann Fenster verschieben und
-die Konfiguration überschreiben, gehört also nicht ins Netzwerk.
+Listens only on 127.0.0.1 by default – the API can move windows and
+overwrite the configuration, so it does not belong on the network.
 
-Live-Ereignisse (neue Clients, Auto-Platzierung) gehen per Server-Sent Events an
+Live events (new clients, auto-placement) are sent via Server-Sent Events to
 /api/events.
 """
 from __future__ import annotations
@@ -16,16 +16,30 @@ import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 from . import i18n
 from .app import App
 from . import config as config_mod
+from . import diagnostics
 from . import titlebar
 from .autoplace import AutoPlacer
 from .i18n import t
 
 log = logging.getLogger("fcwm.web")
 STATIC = Path(__file__).parent / "static"
+STATIC_TYPES = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
+                ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml"}
+
+
+def static_file(url_path: str) -> Path | None:
+    """File of the web UI for a URL path ("/" = index.html) – only within static/ and only
+    known file types."""
+    rel = url_path.lstrip("/") or "index.html"
+    f = (STATIC / rel).resolve()
+    if not f.is_relative_to(STATIC.resolve()) or f.suffix not in STATIC_TYPES or not f.is_file():
+        return None
+    return f
 
 
 def serve(app: App, host: str = "127.0.0.1", port: int = 8765) -> None:
@@ -60,9 +74,7 @@ def serve(app: App, host: str = "127.0.0.1", port: int = 8765) -> None:
         def do_GET(self):
             self._lang()
             path = self.path.split("?")[0]
-            if path in ("/", "/index.html"):
-                self._send(200, (STATIC / "index.html").read_bytes(), "text/html; charset=utf-8")
-            elif path == "/api/state":
+            if path == "/api/state":
                 try:
                     with app.lock:
                         st = app.state()
@@ -70,15 +82,26 @@ def serve(app: App, host: str = "127.0.0.1", port: int = 8765) -> None:
                     st["settings"] = {"hotkeys": app.cfg.hotkeys, "titlebar": app.cfg.titlebar,
                                       "separator": app.cfg.separator,
                                       "characters": app.cfg.characters,
+                                      "web": app.cfg.web, "web_active": {"host": host, "port": port},
                                       "titlebar_available": titlebar.available()}
                     st["events"] = placer.history
+                    st["debug"] = diagnostics.info(app, placer, host, port)
                     self._json(st)
                 except Exception as e:  # noqa: BLE001
                     self._json({"error": str(e)}, 500)
             elif path == "/api/config":
                 self._send(200, app.cfg.path.read_bytes(), "text/plain; charset=utf-8")
+            elif path == "/api/i18n":
+                # Web UI texts: requested language, missing keys from the source language
+                web = i18n.load_catalog("web")
+                code = i18n.match_language(parse_qs(urlsplit(self.path).query).get("lang", [""])[0], web) \
+                    or i18n.match_language(i18n.lang(), web) or i18n.SOURCE
+                self._json({"lang": code, "messages": {**web.get(i18n.SOURCE, {}), **web.get(code, {})},
+                            "languages": [{"code": c, "name": m.get("languageName", c)} for c, m in web.items()]})
             elif path == "/api/events":
                 self._events()
+            elif (f := static_file(path)) is not None:
+                self._send(200, f.read_bytes(), STATIC_TYPES[f.suffix])
             else:
                 self._send(404, b"not found", "text/plain")
 
@@ -96,7 +119,7 @@ def serve(app: App, host: str = "127.0.0.1", port: int = 8765) -> None:
                         ev = q.get(timeout=15)
                         self.wfile.write(f"data: {json.dumps(ev, ensure_ascii=False)}\n\n".encode())
                     except queue.Empty:
-                        self.wfile.write(b": ping\n\n")  # hält die Verbindung offen, erkennt Abbrüche
+                        self.wfile.write(b": ping\n\n")  # keeps the connection open, detects disconnects
                     self.wfile.flush()
             except (BrokenPipeError, ConnectionResetError):
                 pass
@@ -105,14 +128,14 @@ def serve(app: App, host: str = "127.0.0.1", port: int = 8765) -> None:
 
         def do_POST(self):
             self._lang()
-            # Schutz vor Cross-Site-Requests aus fremden Webseiten im Browser
+            # Protection against cross-site requests from foreign web pages in the browser
             if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
                 return self._json({"error": "Content-Type application/json required"}, 415)
             try:
                 data = self._body()
                 with app.lock:
                     if self.path == "/api/apply":
-                        # mit "model" wird ein (ungespeicherter) Entwurf angewendet
+                        # with "model" an (unsaved) draft is applied
                         profile = (app.draft(data.get("name"), data["model"]) if data.get("model")
                                    else data.get("profile"))
                         plan = app.apply(profile, dry_run=bool(data.get("dry_run")))
@@ -125,7 +148,7 @@ def serve(app: App, host: str = "127.0.0.1", port: int = 8765) -> None:
                         app.save_profile(data["name"], data["model"], data.get("old_name"))
                         if placer.profile == data.get("old_name") and data["name"] != data.get("old_name"):
                             placer.configure(profile=data["name"])
-                        placer.reload.set()   # Profil-/Stapel-Kurzbefehle neu registrieren
+                        placer.reload.set()   # re-register profile/stack shortcuts
                         return self._json({"ok": True})
                     if self.path == "/api/profile/delete":
                         app.delete_profile(data["name"])
@@ -143,8 +166,9 @@ def serve(app: App, host: str = "127.0.0.1", port: int = 8765) -> None:
                         return self._json({"ok": True})
                     if self.path == "/api/settings":
                         old_hide, old_sep = bool(app.cfg.titlebar.get("hide")), dict(app.cfg.separator)
-                        config_mod.save_settings(app.cfg, data.get("hotkeys"), data.get("titlebar"),
-                                                 data.get("characters"), data.get("separator"))
+                        config_mod.save_settings(app.cfg, hotkeys=data.get("hotkeys"), titlebar=data.get("titlebar"),
+                                                 characters=data.get("characters"), separator=data.get("separator"),
+                                                 monitor_labels=data.get("monitor_labels"), web=data.get("web"))
                         app.reload()
                         if "titlebar" in data or "characters" in data:
                             titlebar.apply_rules(app.cfg)
@@ -152,26 +176,26 @@ def serve(app: App, host: str = "127.0.0.1", port: int = 8765) -> None:
                         hide_changed = bool(app.cfg.titlebar.get("hide")) != old_hide
                         width_changed = app.cfg.separator.get("width") != old_sep.get("width")
                         if hide_changed or width_changed:
-                            # ohne Titelleiste schrumpft der Rahmen bzw. die Lücke ändert sich ->
-                            # Clients neu ausrichten; KWin braucht nach dem Neuladen der Regeln einen Moment
+                            # without a title bar the frame shrinks or the gap changes ->
+                            # realign clients; KWin needs a moment after reloading the rules
                             placer.reapply_active(delay=0.8 if hide_changed else 0.0)
                         elif app.cfg.separator != old_sep:
-                            placer.update_separators()   # Farbe/Sichtbarkeit: Linien neu zeichnen, nichts bewegen
+                            placer.update_separators()   # color/visibility: redraw lines, move nothing
                         if "characters" in data:
-                            placer.update_previews()     # Namensfarben in den Vorschau-Kacheln
+                            placer.update_previews()     # name colors in the preview tiles
                         return self._json({"ok": True})
                     if self.path == "/api/lock":
                         placer.configure(lock=bool(data.get("enabled")))
                         return self._json(placer.status())
                     if self.path == "/api/reload":
-                        # Konfiguration neu einlesen (z. B. nach Handbearbeitung) – nichts wird verschoben
+                        # re-read the configuration (e.g. after manual editing) – nothing is moved
                         app.reload()
                         titlebar.sync(app.cfg)
                         placer.refresh()
                         log.info(t("reloaded", path=app.cfg.path))
                         return self._json({"ok": True, "config": str(app.cfg.path)})
                     if self.path == "/api/restart":
-                        # sauber beenden (KWin-Skripte entladen, Kurzbefehle freigeben) und neu starten
+                        # shut down cleanly (unload KWin scripts, release shortcuts) and restart
                         restart.set()
                         threading.Thread(target=srv.shutdown, daemon=True).start()
                         return self._json({"ok": True, "pid": os.getpid()})
@@ -187,7 +211,7 @@ def serve(app: App, host: str = "127.0.0.1", port: int = 8765) -> None:
     srv.daemon_threads = True
     placer.start()
     try:
-        titlebar.sync(app.cfg)   # z. B. nach Handbearbeitung der Konfiguration
+        titlebar.sync(app.cfg)   # e.g. after manual editing of the configuration
     except Exception as e:  # noqa: BLE001
         log.warning("Titelleisten: %s", e)
     log.info(t("web_url", url=f"http://{host}:{port}/"))
@@ -197,6 +221,6 @@ def serve(app: App, host: str = "127.0.0.1", port: int = 8765) -> None:
         placer.stop()
         srv.server_close()
     if restart.is_set():
-        # gleicher Prozess (gleiche PID, auch unter systemd), gleiche Argumente
+        # same process (same PID, also under systemd), same arguments
         log.info(t("restarting"))
         os.execv(sys.executable, [sys.executable] + sys.orig_argv[1:])

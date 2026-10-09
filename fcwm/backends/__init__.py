@@ -11,7 +11,7 @@ __all__ = ["Backend", "Placement", "Window", "get_backend"]
 
 
 def get_backend(name: str = "auto") -> Backend:
-    """auto: KWin, wenn erreichbar (Wayland und X11), sonst wmctrl/xdotool unter X11."""
+    """auto: KWin if reachable (Wayland and X11), otherwise wmctrl/xdotool on X11."""
     if name == "kwin" or (name == "auto" and kwin_available()):
         return KWinBackend()
     if name == "x11" or (name == "auto" and os.environ.get("DISPLAY")):

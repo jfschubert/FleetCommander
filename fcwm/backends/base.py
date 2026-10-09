@@ -18,29 +18,31 @@ class Window:
     pid: int
     geometry: Rect
     output: str | None = None
+    transient: bool = False     # belongs to another window (dialog/popup) – only KWin knows this
 
     def to_dict(self) -> dict:
         return {"id": self.id, "caption": self.caption, "class": self.resource_class,
-                "pid": self.pid, "geometry": self.geometry.as_list(), "output": self.output}
+                "pid": self.pid, "geometry": self.geometry.as_list(), "output": self.output,
+                "transient": self.transient}
 
 
 @dataclass
 class Placement:
     window: Window
-    rect: Rect          # Ziel-Rechteck (Frame-Geometrie, also inkl. Dekoration)
-    label: str = ""     # z. B. "Main@center:0" – für Logausgaben
+    rect: Rect          # target rectangle (frame geometry, i.e. including decoration)
+    label: str = ""     # e.g. "Main@center:0" – for log output
     char: str = ""
     monitor: str = ""
     slot: int = 0
     span: tuple[int, int] = (1, 1)
-    auto: bool = False  # True = per "fill" verteilt, nicht fest zugewiesen
-    sub: int | None = None  # Zelle im Subgrid von `slot`
+    auto: bool = False  # True = distributed via "fill", not assigned explicitly
+    sub: int | None = None  # cell in the subgrid of `slot`
 
 
 class Backend(ABC):
     name = "base"
-    # True, wenn move() das Frame-Rechteck (inkl. Titelleiste) setzt. Sonst wird
-    # vorher die konfigurierte Dekoration abgezogen.
+    # True if move() sets the frame rectangle (incl. title bar). Otherwise the
+    # configured decoration is subtracted beforehand.
     sets_frame_geometry = True
 
     @abstractmethod
@@ -49,21 +51,21 @@ class Backend(ABC):
     @abstractmethod
     def apply(self, placements: list[Placement], focus: Window | None = None,
               raise_ids: list[str] | None = None) -> None:
-        """Verschiebt die Fenster; holt danach `raise_ids` der Reihe nach nach vorn
-        (Stapel-Reihenfolge) und aktiviert zuletzt `focus`."""
+        """Moves the windows; then raises `raise_ids` to the front in order
+        (stacking order) and finally activates `focus`."""
 
     def screens(self) -> list[Monitor] | None:
-        """Optional: Monitore inkl. Arbeitsbereich (ohne Panels). None = nicht unterstützt."""
+        """Optional: monitors including work area (without panels). None = not supported."""
         return None
 
     # Listener ---------------------------------------------------------------
-    # on_event(kind, window) mit kind in {"added", "caption", "removed"}
+    # on_event(kind, window) with kind in {"added", "caption", "removed"}
     listener_kind = "polling"
-    listener_features: tuple[str, ...] = ()   # z. B. ("hotkeys", "lock") – nur mit KWin
+    listener_features: tuple[str, ...] = ()   # e.g. ("hotkeys", "lock") – KWin only
 
     def listen(self, on_event: Callable[[str, Window], None], stop: threading.Event,
                interval: float = 2.0, control=None) -> None:
-        """Blockiert bis `stop` gesetzt ist. Standard: Fensterliste regelmässig vergleichen."""
+        """Blocks until `stop` is set. Default: compare the window list periodically."""
         known: dict[str, Window] = {}
         first = True
         while first or not stop.wait(interval):
@@ -84,5 +86,5 @@ class Backend(ABC):
             known, first = cur, False
 
     def snapshot(self) -> tuple[list[Window], list[Monitor] | None]:
-        """Fenster und Monitore in einem Rutsch (Backends können das optimieren)."""
+        """Windows and monitors in one go (backends can optimize this)."""
         return self.list_windows(), self.screens()

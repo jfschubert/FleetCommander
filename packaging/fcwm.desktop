@@ -4,8 +4,15 @@ Name=FleetCommander
 GenericName=EVE Online window layouts
 Comment=Arrange, stack and preview EVE Online clients
 Comment[de]=EVE-Online-Clients anordnen, stapeln und als Vorschau anzeigen
-Exec=fcwm open
-Icon=preferences-system-windows
+Exec=fcwm app
+Icon=fcwm
 Terminal=false
+StartupWMClass=fcwm
 Categories=Utility;
 Keywords=EVE;Online;multibox;window;layout;preview;
+Actions=browser;
+
+[Desktop Action browser]
+Name=Open in browser
+Name[de]=Im Browser öffnen
+Exec=fcwm open

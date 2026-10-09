@@ -1,10 +1,10 @@
-"""Vorschau-Felder: Live-Vorschaubilder der EVE-Clients in einem frei gehaltenen Feld (wie EVE-O Preview).
+"""Preview areas: live thumbnails of the EVE clients in a reserved area (like EVE-O Preview).
 
-Ein KWin-QML-Skript legt pro Vorschau-Feld ein randloses Fenster an und zeigt darin ein Raster aus
-`WindowThumbnail`s – gerendert vom Compositor selbst, ohne Bildschirmaufnahme. Klick auf eine Kachel
-aktiviert den Client. Modus "hidden" zeigt nur Clients, die gerade verdeckt (hinten im Stapel) oder
-minimiert sind. Wie die Trennlinien liegen solche KWin-Fenster immer zuoberst; sie sind daher nur
-sichtbar, solange ein EVE-Client (oder ein Fenster aus einem frei gehaltenen Feld) aktiv ist.
+A KWin QML script creates a borderless window per preview area and shows a grid of
+`WindowThumbnail`s in it – rendered by the compositor itself, without screen capture. Clicking a tile
+activates the client. Mode "hidden" shows only clients that are currently covered (behind in the stack) or
+minimized. Like the separators, such KWin windows always sit on top; they are therefore only
+visible while an EVE client (or a window from a reserved area) is active.
 """
 from __future__ import annotations
 
@@ -26,25 +26,25 @@ import org.kde.kwin as KWinComponents
 
 Item {
     id: root
-    // in Klammern: "{}" wäre für QML sonst ein leerer Codeblock statt eines Objekts
+    // in parentheses: otherwise "{}" would be an empty code block in QML instead of an object
     readonly property var cells: (CELLS)
     readonly property var colors: (COLORS)
     readonly property var extraIds: (EXTRA)
     readonly property var cap: new RegExp(CAPTION)
     readonly property var cls: CLS ? new RegExp(CLS) : null
     readonly property var aw: KWinComponents.Workspace.activeWindow
-    property int rev: 0                      // Takt für Neuberechnung (Stapel, neue Clients, Titel)
+    property int rev: 0                      // tick for recomputation (stack, new clients, titles)
 
     function isEve(w) { return w && w.normalWindow && cap.test(w.caption) && (!cls || cls.test(w.resourceClass)); }
-    // KWins JS-Engine kennt keine benannten Gruppen-Ergebnisse -> erste Gruppe nehmen
+    // KWin's JS engine has no named group results -> take the first group
     function charOf(w) { var m = w.caption.match(cap); return m && m[1] ? m[1] : w.caption; }
     function same(a, b) {
         return Math.abs(a.x - b.x) < 3 && Math.abs(a.y - b.y) < 3 && Math.abs(a.width - b.width) < 3 && Math.abs(a.height - b.height) < 3;
     }
     function clients(mode, stack, tick) {
-        var order = KWinComponents.Workspace.stackingOrder.filter(isEve);   // unten -> oben
+        var order = KWinComponents.Workspace.stackingOrder.filter(isEve);   // bottom -> top
         if (mode === "stack") {
-            // nur dieser Stapel: alle Mitglieder ausser dem obersten sichtbaren
+            // only this stack: all members except the topmost visible one
             var members = order.filter(function (w) { return same(w.frameGeometry, {x: stack[0], y: stack[1], width: stack[2], height: stack[3]}); });
             var visible = members.filter(function (w) { return !w.minimized; });
             var top = visible.length ? visible[visible.length - 1] : null;
@@ -54,7 +54,7 @@ Item {
         var out = order.filter(function (w, i) {
             if (mode !== "hidden") return true;
             if (w.minimized) return true;
-            for (var j = i + 1; j < order.length; j++)                      // liegt ein anderer Client darüber?
+            for (var j = i + 1; j < order.length; j++)                      // is another client above?
                 if (!order[j].minimized && same(order[j].frameGeometry, w.frameGeometry)) return true;
             return false;
         });
@@ -71,7 +71,7 @@ Item {
             id: win
             readonly property var shown: root.clients(modelData.mode, modelData.stack, root.rev)
             readonly property int n: shown.length
-            // Spaltenzahl so wählen, dass die Kacheln (16:9) möglichst gross werden
+            // pick the column count so the tiles (16:9) get as large as possible
             readonly property int cols: {
                 var best = 1, bestArea = 0;
                 for (var c = 1; c <= Math.max(1, n); c++) {
@@ -87,8 +87,8 @@ Item {
             x: modelData.rect[0]; y: modelData.rect[1]; width: modelData.rect[2]; height: modelData.rect[3]
             color: "#121212"
             title: "fcwm-preview"
-            // "always" wie EVE-O Preview; "eve" nur solange ein EVE-Client aktiv ist.
-            // Leisten auf Stapeln verschwinden, wenn es nichts zu zeigen gibt (verdecken sonst das Spiel).
+            // "always" like EVE-O Preview; "eve" only while an EVE client is active.
+            // Bars on stacks disappear when there is nothing to show (they would otherwise cover the game).
             visible: (modelData.show === "always" || root.active) && (!modelData.strip || n > 0)
 
             Text {
@@ -159,7 +159,7 @@ class PreviewOverlay:
             self._dir = None
 
     def show(self, cfg, plan) -> int:
-        """Vorschau-Felder des Plans anzeigen (bzw. entfernen). Rückgabe: Anzahl Felder."""
+        """Show the plan's preview areas (or remove them). Returns: number of areas."""
         self.clear()
         if plan is None or not self.available:
             return 0
@@ -175,7 +175,7 @@ class PreviewOverlay:
                    .replace("EXTRA", json.dumps([p.window.id for p in plan.extra]))
                    .replace("CAPTION", json.dumps(cfg.caption_re.pattern.replace("(?P<", "(?<")))
                    .replace("CLS", json.dumps(cfg.class_re.pattern if cfg.class_re else "")))
-        self._dir = Path(tempfile.mkdtemp(prefix="fcwm-prv-"))   # KWin cacht QML pro Pfad
+        self._dir = Path(tempfile.mkdtemp(prefix="fcwm-prv-"))   # KWin caches QML per path
         path = self._dir / "main.qml"
         path.write_text(qml, encoding="utf-8")
         with SCRIPT_LOCK:
@@ -183,5 +183,5 @@ class PreviewOverlay:
             if out.split()[-1:] and out.split()[-1].lstrip("-").isdigit() and int(out.split()[-1]) >= 0:
                 start_loaded_scripts()
             else:
-                log.warning("Vorschau: KWin hat das Overlay nicht geladen (%s)", out)
+                log.warning("previews: KWin did not load the overlay (%s)", out)
         return len(cells)

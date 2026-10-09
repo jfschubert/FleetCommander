@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61", "wheel"]
+requires = ["setuptools>=77", "wheel"]   # SPDX license expression (license = "…")
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -18,13 +18,17 @@ dependencies = ["pyyaml>=6"]
 Homepage = "https://github.com/jfschubert/FleetCommander"
 
 [project.optional-dependencies]
-roundtrip = ["ruamel.yaml"]   # Kommentare in config.yaml beim Speichern aus der Web-UI erhalten
+roundtrip = ["ruamel.yaml"]   # preserve comments in config.yaml when saving from the web UI
+app = ["PyQt6-WebEngine"]     # standalone application window (fcwm app) instead of a browser tab
 
 [project.scripts]
 fcwm = "fcwm.cli:main"
 
-[tool.setuptools]
-packages = ["fcwm", "fcwm.backends"]
+# Include data folders (static/, locales/) as namespace packages – otherwise setuptools warns
+# that they are importable but not declared.
+[tool.setuptools.packages.find]
+include = ["fcwm*"]
+namespaces = true
 
 [tool.setuptools.package-data]
-fcwm = ["static/*.html"]
+"*" = ["*.html", "*.svg", "*.css", "*.js", "*.json"]

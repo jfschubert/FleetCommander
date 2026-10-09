@@ -26,7 +26,7 @@ class ProfileEditTest(unittest.TestCase):
         self.assertEqual(list(cfg.profiles)[0], "Mining")
         self.assertEqual(cfg.default_profile, "Mining")
         self.assertEqual(cfg.profiles["Mining"].assign[1].span, (1, 2))
-        # unverändertes Raster mit Gewichtungen bleibt erhalten
+        # unchanged grid with weights is preserved
         mb = c.profile_to_model(cfg, cfg.profiles["Multibox-Center"])
         c.save_profile(cfg, "Multibox-Center", mb, "Multibox-Center")
         cfg = c.load(str(self.path))
@@ -48,13 +48,13 @@ class ProfileEditTest(unittest.TestCase):
     def test_moved_grid_lines_roundtrip(self):
         m = c.profile_to_model(self.cfg, self.cfg.profiles["Multibox-Center"])
         self.assertEqual(m["weights"]["center"], [[2, 1], None, None])
-        # Linie verschieben: 70/30
+        # move line: 70/30
         m["weights"]["center"] = [[70, 30], None]
         c.save_profile(self.cfg, "Multibox-Center", m, "Multibox-Center")
         cfg = c.load(str(self.path))
         g = cfg.profiles["Multibox-Center"].grids["center"]
         self.assertEqual((g.cols, g.rows, g.col_weights, g.row_weights), (2, 2, (70.0, 30.0), ()))
-        # gleichmässig zurückgesetzt -> wieder kompakte Schreibweise
+        # reset to even -> compact notation again
         m["weights"] = {}
         self.assertEqual(c.model_to_raw(cfg, m)["grids"]["center"], "2x2")
 
@@ -83,7 +83,7 @@ class ProfileEditTest(unittest.TestCase):
         c.save_profile(cfg, "Fleet-Fight", m, "Fleet-Fight")
         p = c.load(str(self.path)).profiles["Fleet-Fight"]
         self.assertEqual((p.hotkey, p.stack_hotkeys), ("Meta+Ctrl+2", {"left:0": "Meta+Q"}))
-        self.assertEqual([(o.monitor, o.slot, o.max) for o in p.overflow], [("right", 2, None)])  # letztes: kein Max
+        self.assertEqual([(o.monitor, o.slot, o.max) for o in p.overflow], [("right", 2, None)])  # last one: no max
 
     def test_migrates_legacy_evewm_config(self):
         import os, subprocess, sys
@@ -96,7 +96,16 @@ class ProfileEditTest(unittest.TestCase):
                              capture_output=True, text=True)
         self.assertEqual(out.stdout.strip(), str(xdg / "fcwm" / "config.yaml"), out.stderr)
         self.assertEqual((xdg / "fcwm" / "fcwm-state.json").read_text(), '{"auto_place": true}')
-        self.assertTrue((xdg / "evewm" / "config.yaml").exists())      # alter Ordner bleibt als Sicherung
+        self.assertTrue((xdg / "evewm" / "config.yaml").exists())      # old folder stays as a backup
+
+    def test_monitor_labels(self):
+        c.save_settings(self.cfg, monitor_labels={"left": "Links oben"})
+        cfg = c.load(str(self.path))
+        self.assertEqual(cfg.monitors["left"].label, "Links oben")
+        c.save_settings(cfg, monitor_labels={"left": ""})          # empty = automatic name
+        self.assertEqual(c.load(str(self.path)).monitors["left"].label, "")
+        with self.assertRaises(ValueError):
+            c.save_settings(cfg, monitor_labels={"nope": "x"})
 
     def test_invalid_model_is_not_written(self):
         before = self.path.read_text()
@@ -109,3 +118,18 @@ class ProfileEditTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class WebSettingsTest(unittest.TestCase):
+    setUp, tearDown = ProfileEditTest.setUp, ProfileEditTest.tearDown
+
+    def test_port_default_save_and_validation(self):
+        self.assertEqual(self.cfg.web, {"host": "127.0.0.1", "port": 8765})
+        c.save_settings(self.cfg, web={"port": 9001})
+        cfg = c.load(str(self.path))
+        self.assertEqual(cfg.web, {"host": "127.0.0.1", "port": 9001})
+        with self.assertRaises(ValueError):
+            c.save_settings(cfg, web={"port": 70000})
+        c.save_settings(cfg, web={"port": 8765})        # default -> entry disappears again
+        self.assertNotIn("web", c.load(str(self.path)).raw_text)

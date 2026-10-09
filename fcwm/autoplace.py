@@ -1,14 +1,19 @@
-"""Listener + Auto-Platzierung neuer EVE-Clients.
+"""Listener + auto-placement of new EVE clients.
 
-Ablauf: Das Backend meldet Fenster-Ereignisse (KWin-Signale bzw. Polling). Ein Client
-zählt als "neu eingeloggt", sobald sein Titel einen Charakternamen enthält – beim Start
-heisst das Fenster nur "EVE", erst nach der Charakterwahl "EVE - Name".
+Flow: the backend reports window events (KWin signals or polling). A client
+counts as "newly logged in" as soon as its title contains a character name – at startup
+the window is just called "EVE", and only after character selection "EVE - Name".
 
-Werden mehrere Clients kurz nacheinander eingeloggt, sammelt der Debounce sie und
-platziert sie gemeinsam (ein Plan, ein KWin-Aufruf). Bereits platzierte Clients werden
-dabei nicht angefasst und behalten ihren Slot (keep_ids).
+If several clients log in in quick succession, the debounce collects them and
+places them together (one plan, one KWin call). Clients that are already placed
+are left alone and keep their slot (keep_ids).
 
-Zustand (an/aus, Profil) liegt in fcwm-state.json neben der Konfiguration.
+Other windows: if auto-placement is on and the active profile has window cells (match or
+catch_all), newly opened windows are collected the same way and put into their cell. Because many
+programs only set their title shortly after opening, a new window is reassigned on title changes
+for FRESH seconds; after that the tool no longer touches it.
+
+State (on/off, profile) lives in fcwm-state.json next to the configuration.
 """
 from __future__ import annotations
 
@@ -29,6 +34,7 @@ from .i18n import t
 from .layout import make_plan
 
 log = logging.getLogger("fcwm")
+FRESH = 10.0   # seconds during which a new window is reassigned on title change
 
 
 def _short(text: str) -> str:
@@ -42,24 +48,26 @@ class AutoPlacer:
         self.state_path: Path = app.cfg.path.with_name("fcwm-state.json")
         st = self._load_state()
         self.enabled: bool = bool(st.get("auto_place", False))
-        self.profile: str | None = st.get("auto_profile")   # aktives Profil (Auto-Platzierung, Kurzbefehle)
+        self.profile: str | None = st.get("auto_profile")   # active profile (auto-placement, shortcuts)
         self.lock: bool = bool(st.get("lock", False))
-        self.locks: dict[str, list[int]] = {}    # Fenster-ID -> fixiertes Rechteck
-        self.reload = threading.Event()          # KWin-Steuerskript mit neuen Werten laden
+        self.locks: dict[str, list[int]] = {}    # window ID -> locked rectangle
+        self.reload = threading.Event()          # load the KWin control script with new values
         self.overlay = SeparatorOverlay() if "lock" in app.backend.listener_features else None
         self.previews = PreviewOverlay() if self.overlay else None
         self.last_plan = None
         self._seen: dict[str, str] = {}          # window id -> char
         self._pending: set[str] = set()
+        self._pending_extra: set[str] = set()    # new other windows (for window cells)
+        self._fresh: dict[str, float] = {}       # window id -> time of opening
         self._first_pending = 0.0
         self._timer: threading.Timer | None = None
         self._mutex = threading.Lock()
         self._subscribers: list[queue.Queue] = []
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
-        self.history: list[dict] = []            # letzte Ereignisse für neu verbundene UIs
+        self.history: list[dict] = []            # recent events for newly connected UIs
 
-    # -- Zustand ----------------------------------------------------------------
+    # -- State ----------------------------------------------------------------
     def _load_state(self) -> dict:
         try:
             return json.loads(self.state_path.read_text())
@@ -71,16 +79,16 @@ class AutoPlacer:
             self.enabled = bool(enabled)
         if lock is not None and bool(lock) != self.lock:
             self.lock = bool(lock)
-            # Einschalten fixiert die Clients dort, wo sie gerade sind
+            # Turning on locks the clients where they currently are
             self.locks = {w.id: w.geometry.as_list() for w in self.app.clients().values()} if self.lock else {}
             self.reload.set()
         if profile is not ...:
             if profile and profile not in self.app.cfg.profiles:
-                self.app.resolve_profile(profile)  # wirft übersetzten Fehler
+                self.app.resolve_profile(profile)  # raises a translated error
             self.profile = profile or None
         st = self._load_state()
         st.update(auto_place=self.enabled, auto_profile=self.profile, lock=self.lock)
-        self.reload.set()   # Stapel-Kurzbefehle hängen am aktiven Profil
+        self.reload.set()   # stack shortcuts depend on the active profile
         self.state_path.write_text(json.dumps(st, indent=2))
         self.publish({"type": "auto", **self.status()})
 
@@ -95,7 +103,7 @@ class AutoPlacer:
         p = self.profile if self.profile in self.app.cfg.profiles else None
         return p or self.app.cfg.default_profile
 
-    # -- Ereignis-Verteilung (Server-Sent Events) ---------------------------------
+    # -- Event distribution (Server-Sent Events) ---------------------------------
     def subscribe(self) -> queue.Queue:
         q: queue.Queue = queue.Queue(maxsize=200)
         self._subscribers.append(q)
@@ -122,7 +130,7 @@ class AutoPlacer:
         self._thread = threading.Thread(target=self._run, name="fcwm-listener", daemon=True)
         self._thread.start()
         if self.overlay and self.effective_profile():
-            try:   # Linien/Vorschau für das aktive Layout zeigen (Clients stehen meist schon richtig)
+            try:   # show lines/preview for the active layout (clients are usually already in the right place)
                 self.update_separators(self.app.plan(self.effective_profile()))
                 self.update_previews()
             except Exception as e:  # noqa: BLE001
@@ -143,12 +151,12 @@ class AutoPlacer:
         while not self._stop.is_set():
             try:
                 self.app.backend.listen(self._on_event, self._stop, control=self)
-            except Exception as e:  # noqa: BLE001 – Listener neu starten
+            except Exception as e:  # noqa: BLE001 – restart listener
                 log.error("Listener: %s", e)
                 self.publish({"type": "error", "message": str(e)})
                 self._stop.wait(3)
 
-    # -- Steuerung: Kurzbefehle, Fixieren (vom KWin-Listener genutzt) -----------------
+    # -- Control: shortcuts, locking (used by the KWin listener) -----------------
     def consts(self) -> dict:
         cfg = self.app.cfg
         hotkeys = []
@@ -176,7 +184,7 @@ class AutoPlacer:
                             rect = strip_decoration(rect, cfg.decoration)
                         hk("fcwm-stack-" + _short(active + cell), t("hk_stack", cell=cell, profile=active),
                            keys, "cycle-rect", rect=rect.as_list())
-            except Exception as e:  # noqa: BLE001 – Kurzbefehle sollen den Listener nicht stoppen
+            except Exception as e:  # noqa: BLE001 – shortcuts must not stop the listener
                 log.warning("Stapel-Kurzbefehle: %s", e)
         return {"caption": cfg.caption_re.pattern.replace("(?P<", "(?<"),
                 "cls": cfg.class_re.pattern if cfg.class_re else "",
@@ -206,7 +214,7 @@ class AutoPlacer:
             self.publish({"type": "error", "message": str(e)})
 
     def after_apply(self, plan, profile: str | None = None) -> None:
-        """Nach einem vollständigen Anwenden: aktives Profil merken und Fixierungen aktualisieren."""
+        """After a complete apply: remember the active profile and update the locks."""
         if profile and profile in self.app.cfg.profiles and profile != self.profile:
             self.configure(profile=profile)
         if self.lock:
@@ -216,8 +224,8 @@ class AutoPlacer:
         self.update_previews()
 
     def refresh(self) -> None:
-        """Nach dem Neuladen der Konfiguration: Steuerskript (Kurzbefehle, Fixieren) und Overlays
-        (Trennlinien, Vorschau) für das aktive Layout neu aufbauen – ohne Fenster zu bewegen."""
+        """After reloading the configuration: rebuild the control script (shortcuts, locking) and overlays
+        (separators, preview) for the active layout – without moving windows."""
         self.reload.set()
         profile = self.effective_profile()
         if self.overlay and profile:
@@ -229,8 +237,8 @@ class AutoPlacer:
         self.publish({"type": "auto", **self.status()})
 
     def update_previews(self) -> None:
-        """Vorschau-Felder für den zuletzt angewendeten Plan (neu) laden – die Kacheln selbst
-        aktualisieren sich in KWin laufend; neu laden ist nur bei geänderten Feldern/Farben nötig."""
+        """(Re)load preview cells for the last applied plan – the tiles themselves
+        update continuously in KWin; reloading is only needed when cells/colors change."""
         if self.previews:
             try:
                 self.previews.show(self.app.cfg, self.last_plan)
@@ -238,7 +246,7 @@ class AutoPlacer:
                 log.warning("Vorschau: %s", e)
 
     def update_separators(self, plan=None) -> None:
-        """Linien für `plan` zeichnen; ohne Plan erneut für den zuletzt angewendeten (z. B. neue Farbe)."""
+        """Draw lines for `plan`; without a plan, again for the last applied one (e.g. new color)."""
         if plan is not None:
             self.last_plan = plan
         plan = self.last_plan
@@ -249,16 +257,21 @@ class AutoPlacer:
                 log.warning("Trennlinien: %s", e)
 
     def reapply_active(self, delay: float = 0.0) -> None:
-        """Aktives Layout erneut anwenden – z. B. nachdem Titelleisten aus-/eingeblendet wurden
-        (KWin behält die Innengrösse, der Rahmen schrumpft) oder sich der Abstand geändert hat."""
+        """Re-apply the active layout – e.g. after title bars were hidden/shown
+        (KWin keeps the inner size, the frame shrinks) or the gap has changed."""
         profile = self.effective_profile()
         if not profile:
             return
         if delay:
             time.sleep(delay)
         with self.app.lock:
-            plan = self.app.apply(profile, focus=False)   # niemandem den Fokus wegnehmen
+            plan = self.app.apply(profile, focus=False)   # do not take focus away from anyone
         self.after_apply(plan, profile)
+
+    def _wants_windows(self) -> bool:
+        """Does the active profile have cells that take other windows (pattern or catch-all cell)?"""
+        p = self.app.cfg.profiles.get(self.effective_profile() or "")
+        return bool(p and any(b.match or b.catch_all for b in p.blocked))
 
     def _on_event(self, kind: str, w: Window) -> None:
         char = self.app.char_of(w)
@@ -268,11 +281,17 @@ class AutoPlacer:
                     self.reload.set()
                 old = self._seen.pop(w.id, None)
                 self._pending.discard(w.id)
+                self._pending_extra.discard(w.id)
+                self._fresh.pop(w.id, None)
+                self.app.caught.discard(w.id)
                 if old:
                     log.info(t("closed", char=old))
                     self.publish({"type": "closed", "char": old})
                 return
-            if not char or self._seen.get(w.id) == char:
+            if not char:
+                self._on_other(kind, w)
+                return
+            if self._seen.get(w.id) == char:
                 return
             self._seen[w.id] = char
             log.info(t("logged_in", char=char))
@@ -283,10 +302,23 @@ class AutoPlacer:
                 self._pending.add(w.id)
                 self._schedule()
 
+    def _on_other(self, kind: str, w: Window) -> None:
+        """Queue a new (or just-renamed new) non-EVE window for the window cells."""
+        now = time.monotonic()
+        self._fresh = {i: ts for i, ts in self._fresh.items() if now - ts <= FRESH}
+        if kind == "added":
+            self._fresh[w.id] = now
+        if w.id not in self._fresh or w.transient or not self.enabled or not self._wants_windows():
+            return
+        if not self._pending and not self._pending_extra:
+            self._first_pending = now
+        self._pending_extra.add(w.id)
+        self._schedule()
+
     def _schedule(self) -> None:
         if self._timer:
             self._timer.cancel()
-        # Debounce, aber spätestens nach max_wait platzieren
+        # Debounce, but place after max_wait at the latest
         delay = min(self.debounce, max(0.0, self._first_pending + self.max_wait - time.monotonic()))
         self._timer = threading.Timer(delay, self.flush)
         self._timer.daemon = True
@@ -295,7 +327,8 @@ class AutoPlacer:
     def flush(self) -> None:
         with self._mutex:
             ids, self._pending = self._pending, set()
-        if not ids:
+            xids, self._pending_extra = self._pending_extra, set()
+        if not ids and not xids:
             return
         profile = self.effective_profile()
         try:
@@ -303,28 +336,38 @@ class AutoPlacer:
                 windows, mons = self.app.snapshot()
                 keep = {w.id for w in windows} - ids
                 plan = make_plan(self.app.cfg, self.app.resolve_profile(profile), windows, mons,
-                                 frame_geometry=self.app.backend.sets_frame_geometry, keep_ids=keep)
+                                 frame_geometry=self.app.backend.sets_frame_geometry, keep_ids=keep,
+                                 catch_ids=self.app.caught | xids)
                 moves = [p for p in plan.placements if p.window.id in ids]
-                if moves:
-                    self.app.backend.apply(moves, raise_ids=plan.raise_order(ids))
+                extra = [p for p in plan.extra if p.window.id in xids]
+                self.app.caught = (self.app.caught - xids) | (set(plan.caught) & xids)
+                if moves or extra:
+                    self.app.backend.apply(moves + extra, raise_ids=plan.raise_order(ids))
                     self.update_separators(plan)
-                    if self.lock:
+                    if self.lock and moves:
                         self.locks.update({p.window.id: p.rect.as_list() for p in moves})
                         self.reload.set()
             for p in moves:
                 log.info(t("placed", char=p.char, slot=f"{p.monitor}:{slot_text(p.slot, p.sub)}"))
-            new_chars = {self._seen.get(i) for i in ids}
-            unplaced = [c for c in plan.unplaced if c in new_chars]
-            self.publish({"type": "placed", "profile": profile,
-                          "items": [{"char": p.char, "slot": f"{p.monitor}:{slot_text(p.slot, p.sub)}", "auto": p.auto}
-                                    for p in moves],
-                          "unplaced": unplaced})
+            for p in extra:
+                log.info(t("placed", char=p.window.caption, slot=f"{p.monitor}:{slot_text(p.slot, p.sub)}"))
+            if ids:
+                new_chars = {self._seen.get(i) for i in ids}
+                unplaced = [c for c in plan.unplaced if c in new_chars]
+                self.publish({"type": "placed", "profile": profile,
+                              "items": [{"char": p.char, "slot": f"{p.monitor}:{slot_text(p.slot, p.sub)}",
+                                         "auto": p.auto} for p in moves],
+                              "unplaced": unplaced})
+            if extra:
+                self.publish({"type": "windows", "profile": profile,
+                              "items": [{"char": p.window.caption, "slot": f"{p.monitor}:{slot_text(p.slot, p.sub)}"}
+                                        for p in extra]})
         except Exception as e:  # noqa: BLE001
             log.error("%s", e)
             self.publish({"type": "error", "message": str(e)})
 
     def place_existing(self) -> None:
-        """Einmalig alle bereits offenen Clients platzieren (watch --initial)."""
+        """Place all already open clients once (watch --initial)."""
         with self._mutex:
             self._pending |= set(self._seen)
             self._first_pending = time.monotonic()
@@ -332,7 +375,7 @@ class AutoPlacer:
 
 
 def run_forever(app, profile: str | None, initial: bool) -> None:
-    """CLI `watch`: Listener mit eingeschalteter Auto-Platzierung."""
+    """CLI `watch`: listener with auto-placement enabled."""
     placer = AutoPlacer(app)
     placer.enabled = True
     placer.profile = app.resolve_profile(profile)

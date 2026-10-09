@@ -4,349 +4,95 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FleetCommander</title>
-<style>
-  /* Nachbau des EVE-Clients (Photon-UI, wie er unter Proton gerendert wird):
-     schmale Monospace-Schrift, halbtransparente graue Fenster mit feiner Kante,
-     Titel mit Icon und ⋮ — ×, Tabs mit hellblauer Unterstreichung, rechteckige
-     Buttons, blaugraue Auswahl mit hellem linken Rand, goldener Sternenstaub. */
-  :root {
-    --font: "DejaVu Sans Mono", "Liberation Mono", "Cousine", "Menlo", monospace;
-    --bg: #050505;
-    --win: rgba(22, 22, 22, .90); --win-head: rgba(30, 30, 30, .92); --win-line: rgba(255,255,255,.09);
-    --text: #c9c9c9; --bright: #f0f0f0; --muted: #8a8a8a; --dim: #5c5c5c;
-    --blue: #7fc1e8; --blue-line: #9fd3f2; --sel: rgba(78, 108, 132, .55);
-    --banner: rgba(58, 96, 128, .35);
-    --row: rgba(255,255,255,.045); --row-hover: rgba(255,255,255,.07);
-    --btn: rgba(255,255,255,.06); --btn-line: rgba(255,255,255,.28);
-    --ok: #4fc04a; --gold: #e5c33b; --warn: #d9a441; --err: #c24a3e; --sec-low: #d3436c;
-    --pin: rgba(78, 108, 132, .55); --auto: rgba(255,255,255,.07); --off: rgba(255,255,255,.025);
-  }
-  * { box-sizing: border-box; }
-  html { background: var(--bg); }
-  body {
-    margin: 0; color: var(--text); font: 12.5px/1.5 var(--font); min-height: 100vh;
-    background:
-      radial-gradient(1px 1px at 23px 41px, rgba(255,236,190,.75), transparent 60%),
-      radial-gradient(1px 1px at 141px 113px, rgba(255,226,160,.6), transparent 60%),
-      radial-gradient(1.5px 1.5px at 87px 181px, rgba(255,240,200,.8), transparent 60%),
-      radial-gradient(1px 1px at 199px 67px, rgba(255,220,150,.5), transparent 60%),
-      radial-gradient(1px 1px at 61px 229px, rgba(255,232,180,.55), transparent 60%),
-      radial-gradient(1px 1px at 171px 239px, rgba(255,215,140,.45), transparent 60%);
-    background-size: 250px 250px;
-    background-color: var(--bg);
-  }
-  body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-    background:
-      radial-gradient(ellipse 45% 35% at 85% 75%, rgba(150, 110, 35, .22), transparent 70%),
-      radial-gradient(ellipse 35% 30% at 15% 30%, rgba(120, 85, 30, .16), transparent 70%),
-      radial-gradient(ellipse 60% 40% at 55% 10%, rgba(80, 60, 25, .12), transparent 70%); }
-  ::selection { background: var(--sel); color: var(--bright); }
-
-  /* Kopfzeile im Stil der EVE-Ticker-Leiste ("GECKO 248,400,000.00 ISK") */
-  header { display: flex; align-items: center; gap: 16px; padding: 0 14px; height: 38px; position: sticky; top: 0; z-index: 20;
-           background: rgba(12,12,12,.94); border-bottom: 1px solid var(--win-line); }
-  .brand { display: flex; align-items: center; gap: 8px; color: var(--bright); white-space: nowrap; font-weight: 700; }
-  .brand svg { width: 18px; height: 18px; color: var(--blue); }
-  .status { color: var(--text); font-size: 12px; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .status b { color: var(--bright); font-weight: 400; }
-  .status .g { color: var(--ok); }
-  .hdr-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
-  .live { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11.5px; }
-  .live i { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
-  .live.on i { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
-
-  main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 6px; padding: 6px; max-width: 1800px; margin: 0 auto; }
-  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } header .status { display: none; } }
-  .col { display: grid; gap: 6px; align-content: start; min-width: 0; }
-
-  /* Fenster */
-  .win { background: var(--win); border: 1px solid var(--win-line); min-width: 0; backdrop-filter: blur(3px); }
-  .win > .bar { display: flex; align-items: center; gap: 9px; height: 34px; padding: 0 6px 0 10px; background: var(--win-head);
-                border-bottom: 1px solid var(--win-line); user-select: none; }
-  .win > .bar .ico { width: 18px; height: 18px; color: #bdbdbd; flex: none; }
-  .win > .bar h2 { margin: 0; font-size: 14px; font-weight: 400; color: #b5b5b5; white-space: nowrap; }
-  .win > .bar .extra { margin-left: auto; font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  .win > .bar .ctl { display: flex; gap: 2px; margin-left: 8px; }
-  .win > .bar .extra + .ctl { margin-left: 8px; }
-  .win > .bar h2 + .ctl { margin-left: auto; }
-  .wbtn { background: none; border: 0; color: #a8a8a8; width: 22px; height: 22px; padding: 0; font: 15px/22px var(--font); cursor: pointer; }
-  .wbtn:hover { color: var(--bright); background: rgba(255,255,255,.08); }
-  .win > .body { padding: 10px 12px 12px; }
-  .win.collapsed > .body { display: none; }
-
-  /* Tabs: grau, aktiv weiss mit hellblauer Linie */
-  .tabs { display: flex; gap: 2px 18px; flex-wrap: wrap; margin: -4px 0 12px; border-bottom: 1px solid var(--win-line); }
-  .tab { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); padding: 6px 2px 7px;
-         font: 13px var(--font); cursor: pointer; margin-bottom: -1px; }
-  .tab:hover { color: var(--text); }
-  .tab.active { color: var(--bright); border-bottom-color: var(--blue-line); }
-  .tab .def { color: var(--gold); margin-left: 5px; }
-  .tab .act { color: var(--ok); margin-left: 5px; }
-  .tab .dirty { color: var(--warn); margin-left: 5px; font-size: 10px; }
-
-  /* Buttons wie "Jump" / "Rename" / "Destroy" */
-  button { font: 12.5px/1 var(--font); color: var(--text); background: var(--btn); border: 1px solid var(--btn-line);
-           padding: 7px 14px; cursor: pointer; white-space: nowrap; }
-  button:hover:not(:disabled) { background: rgba(255,255,255,.12); color: var(--bright); border-color: rgba(255,255,255,.45); }
-  button:active:not(:disabled) { background: rgba(255,255,255,.18); }
-  button.primary { border-color: rgba(159,211,242,.55); color: var(--bright); background: rgba(127,193,232,.12); }
-  button.primary:hover:not(:disabled) { background: rgba(127,193,232,.22); border-color: var(--blue-line); }
-  button.danger { border-color: rgba(194,74,62,.75); }
-  button.danger:hover:not(:disabled) { border-color: #e0605a; background: rgba(194,74,62,.15); }
-  button:disabled { opacity: .35; cursor: default; }
-  input, select { font: 12.5px var(--font); color: var(--text); background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
-                  padding: 6px 8px; border-radius: 0; outline: none; }
-  input:focus, select:focus { border-color: rgba(159,211,242,.6); }
-  select { padding-right: 6px; }
-  select option { background: #1c1c1c; }
-  label.f { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--muted); }
-  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .grow { flex: 1 1 220px; min-width: 0; }
-  .sep { width: 1px; align-self: stretch; background: var(--win-line); margin: 0 4px; }
-  .small { font-size: 11.5px; color: var(--muted); }
-  .k { font-size: 11.5px; color: var(--muted); }
-
-  /* Checkbox im EVE-Stil (eckig, hellblauer Haken) – Markup: label.switch > input + .track + .lbl */
-  .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
-  .switch input { display: none; }
-  .switch .track { width: 14px; height: 14px; border: 1px solid rgba(255,255,255,.45); background: rgba(0,0,0,.4); position: relative; flex: none; }
-  .switch input:checked + .track { border-color: var(--blue-line); background: rgba(127,193,232,.18); }
-  .switch input:checked + .track::after { content: ""; position: absolute; left: 4px; top: 1px; width: 4px; height: 8px;
-           border: solid var(--blue-line); border-width: 0 2px 2px 0; transform: rotate(45deg); }
-  .switch .lbl { color: var(--text); }
-  .switch:hover .track { border-color: var(--bright); }
-
-  /* Info-Banner wie "Clone jump available" */
-  .banner { background: var(--banner); padding: 8px 12px; display: flex; align-items: center; gap: 10px; color: var(--bright); }
-  .banner.off { background: rgba(255,255,255,.05); color: var(--text); }
-  .banner .q { margin-left: auto; width: 16px; height: 16px; border: 1px solid var(--blue-line); border-radius: 50%; color: var(--blue-line);
-               font-size: 10px; display: grid; place-items: center; cursor: help; flex: none; }
-
-  /* Charakter-Palette (wie Inventar-Items mit grünem Online-Punkt) */
-  #palette { min-height: 42px; border: 1px dashed rgba(255,255,255,.14); padding: 6px; display: flex; gap: 5px; flex-wrap: wrap; align-items: center;
-             background: rgba(0,0,0,.2); }
-  #palette.over { border-color: var(--blue-line); background: rgba(127,193,232,.08); }
-  .chip { padding: 4px 9px 4px 7px; background: var(--row); border: 1px solid transparent; cursor: grab; user-select: none;
-          display: inline-flex; gap: 7px; align-items: center; color: var(--text); }
-  .chip:hover { background: var(--row-hover); color: var(--bright); }
-  .chip .dot { width: 6px; height: 6px; background: var(--dim); }
-  .chip.open .dot { background: var(--ok); }
-  .chip.pinned { background: var(--sel); box-shadow: inset 2px 0 0 var(--blue-line); color: var(--bright); }
-  .chip.auto { box-shadow: inset 2px 0 0 rgba(255,255,255,.35); }
-  .chip.unplaced { box-shadow: inset 2px 0 0 var(--warn); }
-  .chip .where { color: var(--muted); font-size: 11px; }
-  .legend { font-size: 11.5px; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; }
-  .legend i { display: inline-block; width: 10px; height: 10px; margin-right: 5px; vertical-align: -1px; }
-
-  /* Monitor-Vorschau */
-  #canvas { position: relative; width: 100%; margin-top: 10px; background: rgba(0,0,0,.35); border: 1px solid var(--win-line); overflow: hidden; }
-  .mon { position: absolute; background: rgba(14,14,14,.95); border: 1px solid rgba(255,255,255,.14); }
-  .mon .label { position: absolute; left: 7px; top: 3px; font-size: 11px; color: var(--muted); z-index: 3; pointer-events: none; }
-  .mon.unused { background: repeating-linear-gradient(135deg, rgba(255,255,255,.035) 0 6px, transparent 6px 14px), rgba(10,10,10,.95);
-               border-style: dashed; }
-  .area { position: absolute; background: rgba(255,255,255,.025); }
-  .cell { position: absolute; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07); display: flex; flex-direction: column;
-          align-items: center; justify-content: center; text-align: center; padding: 4px; overflow: hidden; color: var(--dim); }
-  .cell.over { background: rgba(127,193,232,.16); border-color: var(--blue-line); z-index: 5; }
-  .cell.p { color: var(--text); z-index: 1; cursor: grab; }
-  .cell.p:hover { color: var(--bright); }
-  .cell.pinned { background: var(--pin); border-color: rgba(159,211,242,.35); box-shadow: inset 2px 0 0 var(--blue-line); color: var(--bright); }
-  .cell.auto { background: var(--auto); border-color: rgba(255,255,255,.14); box-shadow: inset 2px 0 0 rgba(255,255,255,.35); }
-  .cell.offline { background: var(--off); border: 1px dashed rgba(229,195,59,.35); color: var(--muted); }
-  .cell .nm { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
-  .cell .nm::before { content: ""; width: 6px; height: 6px; background: var(--ok); flex: none; }
-  .cell.offline .nm::before { background: var(--gold); }
-  .cell .sub { font-size: 11px; color: var(--muted); }
-  .cell .idx { position: absolute; left: 7px; bottom: 3px; font-size: 10.5px; color: var(--dim); }
-  .cell .tools { position: absolute; right: 3px; top: 3px; display: none; gap: 2px; z-index: 2; }
-  .cell:hover .tools { display: flex; }
-  .cell .tools button { padding: 3px 6px; font-size: 11px; background: rgba(0,0,0,.7); border-color: rgba(255,255,255,.2); }
-  svg.pin { width: 12px; height: 12px; vertical-align: -2px; display: inline-block; }
-
-  /* Stapel: mehrere Charaktere auf einem Slot, oberster zuerst */
-  .cell.stack { justify-content: flex-start; align-items: stretch; padding: 4px 6px 16px; gap: 3px; }
-  .cell .shead { font-size: 10.5px; color: var(--muted); text-align: right; padding-right: 2px; }
-  .cell .slist { display: grid; gap: 2px; overflow-y: auto; min-height: 0; }
-  .srow { display: flex; align-items: center; gap: 6px; padding: 2px 4px 2px 6px; background: rgba(0,0,0,.25); cursor: grab; text-align: left; }
-  .srow:hover { background: rgba(255,255,255,.08); }
-  .srow.top { background: var(--sel); box-shadow: inset 2px 0 0 var(--blue-line); color: var(--bright); }
-  .srow.auto { box-shadow: inset 2px 0 0 rgba(255,255,255,.35); }
-  .srow.offline { color: var(--muted); }
-  .srow.offline .nm::before { background: var(--gold); }
-  .srow .nm { font-size: 12px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .srow .sbtn { display: none; gap: 2px; }
-  .srow:hover .sbtn { display: flex; }
-  .srow .sbtn button { padding: 1px 5px; font-size: 10px; background: rgba(0,0,0,.6); border-color: rgba(255,255,255,.2); }
-
-  /* Rasterlinien-Griffe */
-  .gl { position: absolute; z-index: 6; touch-action: none; }
-  .gl.v { width: 11px; margin-left: -5px; cursor: col-resize; }
-  .gl.h { height: 11px; margin-top: -5px; cursor: row-resize; }
-  .gl::after { content: ""; position: absolute; background: rgba(159,211,242,.0); transition: background .1s; }
-  .gl.v::after { left: 5px; top: 0; bottom: 0; width: 1px; }
-  .gl.h::after { top: 5px; left: 0; right: 0; height: 1px; }
-  .gl:hover::after, body.drag-v .gl.v:hover::after, body.drag-h .gl.h:hover::after { background: var(--blue-line); box-shadow: 0 0 6px var(--blue-line); }
-  .gl::before { content: ""; position: absolute; width: 7px; height: 7px; background: rgba(159,211,242,.55); left: 50%; top: 50%;
-                transform: translate(-50%, -50%) rotate(45deg); opacity: .55; }
-  .gl:hover::before { opacity: 1; background: var(--blue-line); }
-  body.drag-v, body.drag-v * { cursor: col-resize !important; user-select: none; }
-  body.drag-h, body.drag-h * { cursor: row-resize !important; user-select: none; }
-  #gltip { position: fixed; display: none; z-index: 60; pointer-events: none; background: rgba(20,20,20,.96); color: var(--bright);
-           border: 1px solid rgba(255,255,255,.2); padding: 3px 8px; font-size: 11.5px; white-space: pre; }
-
-  /* Freigehaltene Felder (Browser, RIFT …) */
-  .cell.blocked { background: repeating-linear-gradient(135deg, rgba(229,195,59,.07) 0 5px, transparent 5px 12px), rgba(0,0,0,.35);
-                  border: 1px dashed rgba(229,195,59,.4); color: var(--muted); z-index: 1; }
-  .cell.blocked .bl { color: #e8d48a; font-size: 13px; }
-  .cell.blocked .bl::before { content: "⊘ "; color: rgba(229,195,59,.7); }
-  .cell.blocked.preview { background: repeating-linear-gradient(135deg, rgba(127,193,232,.07) 0 5px, transparent 5px 12px), rgba(0,0,0,.35);
-                          border-color: rgba(159,211,242,.45); }
-  .cell.blocked.preview .bl { color: var(--blue); }
-  .cell.blocked.preview .bl::before { content: ""; }
-  .cell.blocked, .badge, .sgtag { cursor: grab; }
-  /* Kurzbefehl-Felder: Klick, dann Taste drücken */
-  input.keycap { cursor: pointer; text-align: center; min-width: 150px; }
-  input.keycap.rec { border-color: var(--blue-line); background: rgba(127,193,232,.12); color: var(--bright); }
-  .pop { position: fixed; display: none; z-index: 70; gap: 10px; width: 290px; padding: 12px; background: rgba(24,24,24,.98);
-         border: 1px solid rgba(255,255,255,.18); box-shadow: inset 0 2px 0 var(--blue-line), 0 10px 30px rgba(0,0,0,.6); }
-  .pop b { font-weight: 400; color: var(--bright); }
-  /* Überlauf-Felder + Stapel-Kurzbefehle als kleine Schilder */
-  .badge { position: absolute; z-index: 7; padding: 1px 6px; font-size: 10.5px; line-height: 16px; cursor: pointer; white-space: nowrap;
-           background: rgba(0,0,0,.78); border: 1px solid; }
-  .badge.of { border-color: rgba(229,195,59,.6); color: #e8d48a; }
-  .badge.hk { border-color: rgba(159,211,242,.5); color: var(--blue); }
-  .cell.ofl:not(.p) { border: 1px dashed rgba(229,195,59,.45); }
-  .badge.sp { border-color: rgba(159,211,242,.5); color: var(--blue); }
-  .spstrip { position: absolute; z-index: 3; pointer-events: none; border: 1px dashed rgba(159,211,242,.6);
-             background: repeating-linear-gradient(90deg, rgba(127,193,232,.18) 0 18px, rgba(127,193,232,.06) 18px 22px); }
-  #tbChars li { align-items: center; }
-  input[type=color] { width: 34px; height: 22px; padding: 0 2px; background: transparent; border: 1px solid rgba(255,255,255,.2); cursor: pointer; }
-  .clr { display: inline-flex; gap: 4px; align-items: center; }
-  .clr button { padding: 2px 6px; font-size: 11px; }
-
-  /* Subgrids */
-  .subframe { position: absolute; border: 1px solid rgba(159,211,242,.35); pointer-events: none; z-index: 2; }
-  .subframe .sgtag { pointer-events: auto; position: absolute; left: 3px; top: 3px; padding: 1px 5px; font-size: 10.5px;
-                     background: rgba(0,0,0,.75); border-color: rgba(159,211,242,.45); color: var(--blue); z-index: 4; }
-  .cell.subcell { border-color: rgba(159,211,242,.14); }
-  .cell.tiny { padding: 2px; }
-  .cell.tiny .sub, .cell.tiny .shead { display: none; }
-  .cell.tiny .nm { font-size: 11px; }
-  .cell.tiny .idx { font-size: 9px; left: 3px; bottom: 1px; }
-  .gl.sg::before { width: 5px; height: 5px; }
-  #subpop { position: fixed; display: none; z-index: 70; gap: 10px; width: 280px; padding: 12px; background: rgba(24,24,24,.98);
-            border: 1px solid rgba(255,255,255,.18); box-shadow: inset 0 2px 0 var(--blue-line), 0 10px 30px rgba(0,0,0,.6); }
-  #subpop b { font-weight: 400; color: var(--bright); }
-  #cellpop { position: fixed; display: none; z-index: 70; gap: 8px; width: 300px; padding: 12px; background: rgba(24,24,24,.98);
-             border: 1px solid rgba(255,255,255,.18); box-shadow: inset 0 2px 0 var(--blue-line), 0 10px 30px rgba(0,0,0,.6); }
-  #cellpop input { width: 100%; }
-
-  /* Monitor-Karten (wie Listen-Gruppen mit ▸) */
-  #moncards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px; margin-top: 8px; }
-  .mcard { background: var(--row); padding: 8px 10px; display: grid; gap: 7px; }
-  .mcard.off { opacity: .55; }
-  .mcard.off .switch { opacity: 1; }
-  .mcard .t { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; }
-  .mcard .t b { font-weight: 400; color: var(--bright); }
-  .mcard .t b::before { content: "▸ "; color: var(--muted); }
-  .stepper { display: inline-flex; align-items: center; border: 1px solid rgba(255,255,255,.18); }
-  .stepper button { border: 0; padding: 4px 8px; background: transparent; }
-  .stepper span { min-width: 20px; text-align: center; color: var(--bright); }
-  .mcard a { color: var(--blue); text-decoration: none; }
-  .mcard a:hover { text-decoration: underline; }
-  .mcard input[type=checkbox] { accent-color: #7fc1e8; vertical-align: -2px; }
-
-  /* Meldungen */
-  .msg { padding: 7px 10px; margin-top: 8px; border-left: 2px solid; background: rgba(255,255,255,.04); }
-  .msg.warn { border-color: var(--warn); color: #e6c486; }
-  .msg.err { border-color: var(--err); color: #ec9a91; }
-  .msg.ok { border-color: var(--ok); color: #a9dba6; }
-
-  /* Listen (Clients, Monitore, Ereignisse) */
-  .kv { display: grid; grid-template-columns: auto 1fr; gap: 7px 12px; align-items: center; }
-  ul.list { list-style: none; padding: 0; margin: 0; }
-  ul.list li { padding: 5px 8px; display: flex; justify-content: space-between; gap: 8px; }
-  ul.list li:nth-child(odd) { background: rgba(255,255,255,.025); }
-  ul.list li:hover { background: var(--row-hover); }
-  #clients li span:first-child::before { content: ""; display: inline-block; width: 6px; height: 6px; background: var(--ok); margin-right: 8px; vertical-align: 1px; }
-  #log { max-height: 340px; overflow-y: auto; }
-  #log li { display: grid; grid-template-columns: auto 1fr; gap: 10px; justify-content: start; }
-  #log time { color: var(--dim); white-space: nowrap; }
-  #log .login { color: var(--blue); } #log .placed { color: #9fd49b; } #log .closed { color: var(--muted); } #log .error { color: #ec9a91; }
-
-  /* Benachrichtigungen unten rechts */
-  #toasts { position: fixed; right: 14px; bottom: 14px; display: grid; gap: 6px; z-index: 50; width: min(380px, calc(100vw - 28px)); }
-  .toast { background: rgba(24,24,24,.97); border: 1px solid rgba(255,255,255,.14); box-shadow: inset 2px 0 0 var(--blue-line), 0 6px 20px rgba(0,0,0,.6);
-           padding: 8px 12px; animation: tin .18s ease-out; }
-  .toast .tt { color: var(--muted); font-size: 11px; margin-bottom: 2px; }
-  .toast.ok { box-shadow: inset 2px 0 0 var(--ok), 0 6px 20px rgba(0,0,0,.6); }
-  .toast.warn { box-shadow: inset 2px 0 0 var(--warn), 0 6px 20px rgba(0,0,0,.6); }
-  .toast.err { box-shadow: inset 2px 0 0 var(--err), 0 6px 20px rgba(0,0,0,.6); }
-  @keyframes tin { from { transform: translateY(8px); opacity: 0; } }
-
-  textarea { width: 100%; min-height: 380px; background: rgba(0,0,0,.45); color: var(--text); border: 1px solid rgba(255,255,255,.1);
-             padding: 10px; font: 12px/1.5 var(--font); }
-  details summary { cursor: pointer; color: var(--text); }
-  details summary::marker { color: var(--muted); }
-  ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.18); }
-</style>
+<link rel="icon" href="fcwm.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/app.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2 21 7v10l-9 5-9-5V7z"/><path d="M12 7v10M7.5 9.5 12 12l4.5-2.5" opacity=".6"/></symbol>
-  <symbol id="i-profile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="3" width="16" height="18"/><path d="M8 8h8M8 12h8M8 16h5"/></symbol>
-  <symbol id="i-layout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="8" height="7"/><rect x="13" y="4" width="8" height="7"/><rect x="3" y="13" width="18" height="7"/></symbol>
-  <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></symbol>
-  <symbol id="i-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/></symbol>
-  <symbol id="i-pilot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4.5 4.5-6.5 8-6.5s7 2 8 6.5"/></symbol>
-  <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></symbol>
-  <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M9 3h6l-1 6 3 3v2H7v-2l3-3z"/><path d="M12 14v7"/></symbol>
-  <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="6" width="20" height="12"/><path d="M6 10h1M10 10h1M14 10h1M18 10h1M7 14h10"/></symbol>
-  <symbol id="i-brush" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 21c3 0 5-1 5-4l9-9-3-3-9 9c-3 0-2 4-2 7z"/><path d="M14 5l5 5"/></symbol>
-  <symbol id="i-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="12"/><path d="M9 20h6M12 16v4"/></symbol>
+  <!-- Icons: Lucide (https://lucide.dev), ISC license – see NOTICE -->
+  <symbol id="i-profile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:layers --><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/></symbol>
+  <symbol id="i-layout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:layout-grid --><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:file-cog --><path d="M15 8a1 1 0 0 1-1-1V2a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8z"/><path d="M20 8v12a2 2 0 0 1-2 2h-4.182"/><path d="m3.305 19.53.923-.382"/><path d="M4 10.592V4a2 2 0 0 1 2-2h8"/><path d="m4.228 16.852-.924-.383"/><path d="m5.852 15.228-.383-.923"/><path d="m5.852 20.772-.383.924"/><path d="m8.148 15.228.383-.923"/><path d="m8.53 21.696-.382-.924"/><path d="m9.773 16.852.922-.383"/><path d="m9.773 19.148.922.383"/><circle cx="7" cy="18" r="3"/></symbol>
+  <symbol id="i-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:wand-sparkles --><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/></symbol>
+  <symbol id="i-pilot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:users --><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:bell --><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:pin --><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:keyboard --><path d="M10 8h.01"/><path d="M12 12h.01"/><path d="M14 8h.01"/><path d="M16 12h.01"/><path d="M18 8h.01"/><path d="M6 8h.01"/><path d="M7 16h10"/><path d="M8 12h.01"/><rect width="20" height="16" x="2" y="4" rx="2"/></symbol>
+  <symbol id="i-brush" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:paintbrush --><path d="m14.622 17.897-10.68-2.913"/><path d="M18.376 2.622a1 1 0 1 1 3.002 3.002L17.36 9.643a.5.5 0 0 0 0 .707l.944.944a2.41 2.41 0 0 1 0 3.408l-.944.944a.5.5 0 0 1-.707 0L8.354 7.348a.5.5 0 0 1 0-.707l.944-.944a2.41 2.41 0 0 1 3.408 0l.944.944a.5.5 0 0 0 .707 0z"/><path d="M9 8c-1.804 2.71-3.97 3.46-6.583 3.948a.507.507 0 0 0-.302.819l7.32 8.883a1 1 0 0 0 1.185.204C12.735 20.405 16 16.792 16 15"/></symbol>
+  <symbol id="i-cog" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:settings --><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:globe --><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+  <symbol id="i-lang" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:languages --><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></symbol>
+  <symbol id="i-bug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:bug --><path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/></symbol>
+  <symbol id="i-isk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:coins --><path d="M13.744 17.736a6 6 0 1 1-7.48-7.48"/><path d="M15 6h1v4"/><path d="m6.134 14.768.866-.5 2 3.464"/><circle cx="16" cy="8" r="6"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:monitor --><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></symbol>
+  <symbol id="i-min" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:minus --><path d="M5 12h14"/></symbol>
+  <symbol id="i-max" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:square --><rect width="18" height="18" x="3" y="3" rx="2"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:x --><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:copy --><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-eraser" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:eraser --><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:pencil --><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:star --><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:trash-2 --><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="i-wider" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:move-horizontal --><path d="m18 8 4 4-4 4"/><path d="M2 12h20"/><path d="m6 8-4 4 4 4"/></symbol>
+  <symbol id="i-taller" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:move-vertical --><path d="M12 2v20"/><path d="m8 18 4 4 4-4"/><path d="m8 6 4-4 4 4"/></symbol>
+  <symbol id="i-preview" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:picture-in-picture-2 --><path d="M21 9V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h4"/><rect width="10" height="7" x="12" y="13" rx="2"/></symbol>
+  <symbol id="i-split" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:grid-2x2 --><path d="M12 3v18"/><path d="M3 12h18"/><rect x="3" y="3" width="18" height="18" rx="2"/></symbol>
+  <symbol id="i-overflow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:chevrons-down --><path d="m7 6 5 5 5-5"/><path d="m7 13 5 5 5-5"/></symbol>
+  <symbol id="i-ban" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:ban --><circle cx="12" cy="12" r="10"/><path d="M4.929 4.929 19.07 19.071"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:arrow-up --><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:ellipsis --><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+  <symbol id="i-restore" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:copy --><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><!-- lucide:external-link --><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
 </svg>
 <header>
-  <div class="brand"><svg><use href="#i-logo"/></svg>FleetCommander</div>
-  <span class="status" id="meta"></span>
+  <div class="brand"><img src="fcwm.svg" alt="">FleetCommander</div>
+  <nav class="pages">
+    <button class="page" data-page="layout" data-i18n="pgLayout"></button>
+    <button class="page" data-page="settings" data-i18n="pgSettings"></button>
+    <button class="page" data-page="about" data-i18n="pgAbout"></button>
+  </nav>
   <div class="hdr-right">
     <span class="live" id="live"><i></i><span data-i18n="live"></span></span>
     <label class="switch"><input type="checkbox" id="autoToggle"><span class="track"></span><span class="lbl" data-i18n="autoTitle"></span></label>
     <label class="switch" id="lockWrap"><input type="checkbox" id="lockToggle"><span class="track"></span><span class="lbl" data-i18n="lockShort"></span></label>
-    <select id="lang" aria-label="Language"><option value="de">Deutsch</option><option value="en">English</option></select>
+  </div>
+  <!-- custom window frame: only visible in the app window (fcwm app) -->
+  <div class="winctl" id="winctl" hidden>
+    <button id="winMin" data-i18n-title="winMin"><svg class="ic"><use href="#i-min"/></svg></button><button id="winMax" data-i18n-title="winMax"><svg class="ic"><use href="#i-max"/></svg></button><button id="winClose" class="close" data-i18n-title="winClose"><svg class="ic"><use href="#i-close"/></svg></button>
   </div>
 </header>
 
-<main>
+<main class="page-layout" data-page="layout">
   <div class="col">
     <section class="win" data-win="profiles">
       <div class="bar"><svg class="ico"><use href="#i-profile"/></svg><h2 data-i18n="profiles"></h2><span class="extra" id="cfgpathTop"></span>
-        <span class="ctl"><button class="wbtn" data-collapse title="—">—</button></span></div>
+        <span class="ctl"><button class="wbtn" data-collapse><svg class="ic"><use href="#i-min"/></svg></button></span></div>
       <div class="body">
         <div class="tabs" id="tabs"></div>
         <div class="row">
-          <label class="f"><span data-i18n="name"></span><input id="pname" size="18"></label>
-          <label class="f grow"><span data-i18n="description"></span><input id="pdesc"></label>
-          <label class="f"><span data-i18n="focusEnd"></span><select id="pfocus"></select></label>
-          <label class="f"><span data-i18n="profileHotkey"></span><input id="photkey" class="keycap" size="16" readonly></label>
-        </div>
-        <div class="row" style="margin-top:12px">
+          <input id="pname" size="22" aria-label="Name">
           <button class="primary" id="apply" data-i18n="apply"></button>
           <button id="save" data-i18n="save"></button>
           <button id="discard" data-i18n="discard"></button>
           <span class="sep"></span>
-          <button id="dup" data-i18n="duplicate"></button>
-          <button id="mkdefault" data-i18n="makeDefault"></button>
-          <button id="del" class="danger" data-i18n="delete"></button>
-          <span class="sep"></span>
           <button id="refresh" data-i18n="refresh"></button>
+          <button id="profmenu" class="more-btn" aria-haspopup="menu"><svg class="ic"><use href="#i-more"/></svg></button>
         </div>
+        <details class="more" id="profmore">
+          <summary data-i18n="moreProfile"></summary>
+          <div class="row">
+            <label class="f grow"><span data-i18n="description"></span><input id="pdesc"></label>
+            <label class="f"><span data-i18n="focusEnd"></span><select id="pfocus"></select></label>
+            <label class="f"><span data-i18n="profileHotkey"></span><input id="photkey" class="keycap" size="16" readonly></label>
+          </div>
+        </details>
         <div id="msgs"></div>
       </div>
     </section>
-
     <section class="win" data-win="layout">
-      <div class="bar"><svg class="ico"><use href="#i-layout"/></svg><h2 data-i18n="layout"></h2><span class="extra" data-i18n="layoutHint"></span>
-        <span class="ctl"><button class="wbtn" data-collapse>—</button></span></div>
+      <div class="bar"><svg class="ico"><use href="#i-layout"/></svg><h2 data-i18n="layout"></h2><span class="info" data-tip="layoutHint">i</span>
+        <span class="ctl"><button class="wbtn" data-collapse><svg class="ic"><use href="#i-min"/></svg></button></span></div>
       <div class="body">
         <div id="palette"></div>
         <div class="row" style="margin-top:8px">
@@ -358,25 +104,113 @@
             <span><i style="border:1px dashed var(--gold)"></i><span data-i18n="lgOffline"></span></span>
           </div>
         </div>
-        <div class="small" style="margin-top:6px" data-i18n="toolsHint"></div>
         <div id="canvas"></div>
         <div id="moncards"></div>
         <div id="planmsgs"></div>
       </div>
     </section>
-
-    <section class="win collapsed" data-win="config">
+  </div>
+  <aside class="col">
+    <section class="win" data-win="auto">
+      <div class="bar"><svg class="ico"><use href="#i-auto"/></svg><h2 data-i18n="autoTitle"></h2>
+        <span class="ctl"><button class="wbtn" data-collapse><svg class="ic"><use href="#i-min"/></svg></button></span></div>
+      <div class="body" style="display:grid;gap:10px">
+        <div class="banner off" id="autoBanner"><span id="autoBannerText"></span><span class="info" data-tip="autoHelp">i</span></div>
+        <label class="switch"><input type="checkbox" id="autoToggle2"><span class="track"></span><span class="lbl" id="autoState"></span></label>
+        <div class="kv">
+          <span class="k" data-i18n="profile"></span><select id="autoProfile"></select>
+          <span class="k" data-i18n="listener"></span><span id="listenerKind"></span>
+        </div>
+      </div>
+    </section>
+    <section class="win" data-win="clients">
+      <div class="bar"><svg class="ico"><use href="#i-pilot"/></svg><h2 data-i18n="clients"></h2><span class="extra" id="clientCount"></span>
+        <span class="ctl"><button class="wbtn" data-collapse><svg class="ic"><use href="#i-min"/></svg></button></span></div>
+      <div class="body"><ul class="list" id="clients"></ul></div>
+    </section>
+    <section class="win" data-win="events">
+      <div class="bar"><svg class="ico"><use href="#i-bell"/></svg><h2 data-i18n="events"></h2>
+        <span class="ctl" style="margin-left:auto"><button class="wbtn" id="clearlog" title=""><svg class="ic"><use href="#i-eraser"/></svg></button><button class="wbtn" data-collapse><svg class="ic"><use href="#i-min"/></svg></button></span></div>
+      <div class="body"><ul class="list" id="log"></ul></div>
+    </section>
+  </aside>
+</main>
+<main class="page-settings" data-page="settings" hidden>
+  <div class="col">
+    <section class="win" data-win="general">
+      <div class="bar"><svg class="ico"><use href="#i-lang"/></svg><h2 data-i18n="general"></h2>
+        <span class="ctl"><button class="wbtn" data-collapse><svg class="ic"><use href="#i-min"/></svg></button></span></div>
+      <div class="body">
+        <div class="kv"><span class="k" data-i18n="language"></span><select id="lang" aria-label="Language"></select></div>
+      </div>
+    </section>
+    <section class="win" data-win="hotkeys">
+      <div class="bar"><svg class="ico"><use href="#i-key"/></svg><h2 data-i18n="hotkeys"></h2><span class="info" data-tip="hkHint">i</span>
+        <span class="ctl"><button class="wbtn" data-collapse><svg class="ic"><use href="#i-min"/></svg></button></span></div>
+      <div class="body" style="display:grid;gap:8px">
+        <div class="kv">
+          <span class="k" data-i18n="hkNext"></span><input class="keycap" data-hk="next_profile" readonly>
+          <span class="k" data-i18n="hkPrev"></span><input class="keycap" data-hk="prev_profile" readonly>
+          <span class="k" data-i18n="hkCycle"></span><input class="keycap" data-hk="cycle_stack" readonly>
+        </div>
+      </div>
+    </section>
+    <section class="win" data-win="titlebars">
+      <div class="bar"><svg class="ico"><use href="#i-brush"/></svg><h2 data-i18n="titlebars"></h2><span class="info" data-tip="tbHint">i</span>
+        <span class="ctl"><button class="wbtn" data-collapse><svg class="ic"><use href="#i-min"/></svg></button></span></div>
+      <div class="body" style="display:grid;gap:8px">
+        <label class="switch"><input type="checkbox" id="tbHide"><span class="track"></span><span class="lbl" data-i18n="tbHide"></span></label>
+        <div class="row"><span class="k" data-i18n="tbDefault"></span><span id="tbDefault" style="margin-left:auto"></span></div>
+        <div class="row"><span class="k"><span data-i18n="sepWidth"></span> <span class="info" data-tip="sepHint">i</span></span>
+          <span class="stepper" style="margin-left:auto"><button data-sep="-">−</button><span id="sepWidth"></span><button data-sep="+">+</button></span></div>
+        <div class="row"><span class="k" data-i18n="sepColor"></span><span id="sepColor" style="margin-left:auto"></span></div>
+        <div class="row"><span class="k" data-i18n="pvShow"></span><select id="sepShow" style="margin-left:auto">
+          <option value="always" data-i18n="sepAlways"></option><option value="eve" data-i18n="pvEve"></option></select></div>
+        <ul class="list" id="tbChars"></ul>
+      </div>
+    </section>
+  </div>
+  <div class="col">
+    <section class="win" data-win="web">
+      <div class="bar"><svg class="ico"><use href="#i-globe"/></svg><h2 data-i18n="webUi"></h2><span class="info" data-tip="webHint">i</span>
+        <span class="ctl"><button class="wbtn" data-collapse><svg class="ic"><use href="#i-min"/></svg></button></span></div>
+      <div class="body" style="display:grid;gap:8px">
+        <div class="kv">
+          <span class="k" data-i18n="webAddress"></span><span id="webActive"></span>
+          <span class="k" data-i18n="webPort"></span><span class="row"><input id="webPort" type="number" min="1" max="65535" style="width:110px">
+            <button id="webSave" data-i18n="webSaveRestart"></button></span>
+        </div>
+        <div id="webMsg"></div>
+      </div>
+    </section>
+    <section class="win" data-win="debug">
+      <div class="bar"><svg class="ico"><use href="#i-bug"/></svg><h2 data-i18n="debugTitle"></h2>
+        <span class="ctl"><button class="wbtn" id="dbgCopy" data-i18n-title="dbgCopy"><svg class="ic"><use href="#i-copy"/></svg></button><button class="wbtn" data-collapse><svg class="ic"><use href="#i-min"/></svg></button></span></div>
+      <div class="body dbg">
+        <div class="kv" id="dbgInfo"></div>
+        <div class="k" id="dbgClientsTitle"></div>
+        <div class="tscroll"><table id="dbgClients"></table></div>
+        <div class="k" id="dbgMonsTitle"></div>
+        <div class="tscroll"><table id="dbgMons"></table></div>
+        <div class="row dbg-actions">
+          <button class="primary" id="dbgIssueCopy"><svg class="ic"><use href="#i-copy"/></svg> <span data-i18n="dbgIssueCopy"></span></button>
+          <a class="btn" href="https://github.com/jfschubert/FleetCommander/issues/new" target="_blank" rel="noopener"><svg class="ic"><use href="#i-link"/></svg> <span data-i18n="dbgIssueOpen"></span></a>
+          <span class="small" data-i18n="dbgIssueHint"></span>
+        </div>
+        <textarea id="dbgOut" rows="8" readonly hidden></textarea>
+      </div>
+    </section>
+    <section class="win" data-win="config">
       <div class="bar"><svg class="ico"><use href="#i-gear"/></svg><h2 data-i18n="configFile"></h2><span class="extra" id="cfgpath"></span>
-        <span class="ctl"><button class="wbtn" data-collapse>—</button></span></div>
+        <span class="ctl"><button class="wbtn" data-collapse><svg class="ic"><use href="#i-min"/></svg></button></span></div>
       <div class="body">
         <div class="row" style="margin-bottom:10px">
           <button id="reloadCfg" data-i18n="reloadCfg"></button>
           <button id="restartWm" data-i18n="restartWm"></button>
-          <span class="small" data-i18n="reloadHint"></span>
+          <span class="info" data-tip="reloadHint">i</span>
         </div>
         <details id="cfgdetails">
-          <summary data-i18n="editRaw"></summary>
-          <p class="small" data-i18n="editRawHint"></p>
+          <summary><span data-i18n="editRaw"></span> <span class="info" data-tip="editRawHint">i</span></summary>
           <textarea id="cfg" spellcheck="false"></textarea>
           <div class="row" style="margin-top:8px">
             <button class="primary" id="savecfg" data-i18n="saveFile"></button>
@@ -386,69 +220,62 @@
       </div>
     </section>
   </div>
-
-  <aside class="col">
-    <section class="win" data-win="auto">
-      <div class="bar"><svg class="ico"><use href="#i-auto"/></svg><h2 data-i18n="autoTitle"></h2>
-        <span class="ctl"><button class="wbtn" data-collapse>—</button></span></div>
-      <div class="body" style="display:grid;gap:10px">
-        <div class="banner off" id="autoBanner"><span id="autoBannerText"></span><span class="q" id="autoHelpQ">?</span></div>
-        <label class="switch"><input type="checkbox" id="autoToggle2"><span class="track"></span><span class="lbl" id="autoState"></span></label>
-        <div class="kv">
-          <span class="k" data-i18n="profile"></span><select id="autoProfile"></select>
-          <span class="k" data-i18n="listener"></span><span id="listenerKind"></span>
+</main>
+<main class="page-about" data-page="about" hidden>
+  <div class="col">
+    <section class="win about-hero">
+      <div class="body">
+        <img src="fcwm.svg" alt="" class="about-logo">
+        <div>
+          <h1>FleetCommander</h1>
+          <div class="small" id="aboutVersion"></div>
+          <p data-i18n="aboutTagline"></p>
+          <div class="about-links">
+            <a href="https://jfschubert.github.io/FleetCommander/" target="_blank" rel="noopener" data-i18n="aboutDocs"></a>
+            <a href="https://github.com/jfschubert/FleetCommander" target="_blank" rel="noopener">GitHub</a>
+            <a href="https://github.com/jfschubert/FleetCommander/issues" target="_blank" rel="noopener" data-i18n="aboutIssues"></a>
+            <a href="https://github.com/jfschubert/FleetCommander/blob/main/LICENSE" target="_blank" rel="noopener">GPL-3.0</a>
+          </div>
         </div>
       </div>
     </section>
-    <section class="win" data-win="hotkeys">
-      <div class="bar"><svg class="ico"><use href="#i-key"/></svg><h2 data-i18n="hotkeys"></h2>
-        <span class="ctl"><button class="wbtn" data-collapse>—</button></span></div>
-      <div class="body" style="display:grid;gap:8px">
-        <div class="kv">
-          <span class="k" data-i18n="hkNext"></span><input class="keycap" data-hk="next_profile" readonly>
-          <span class="k" data-i18n="hkPrev"></span><input class="keycap" data-hk="prev_profile" readonly>
-          <span class="k" data-i18n="hkCycle"></span><input class="keycap" data-hk="cycle_stack" readonly>
+    <section class="win" data-win="donate">
+      <div class="bar"><svg class="ico"><use href="#i-isk"/></svg><h2 data-i18n="donateTitle"></h2></div>
+      <div class="body donate">
+        <img id="donatePortrait" class="portrait" alt="Mister Forever" loading="lazy"
+             src="https://images.evetech.net/characters/379469875/portrait?size=256"
+             onerror="this.onerror=null; this.src='fcwm.svg'; this.classList.add('fallback')">
+        <div class="donate-text">
+          <p data-i18n="donateText"></p>
+          <div class="donate-char">Mister Forever</div>
+          <ol class="small">
+            <li data-i18n="donateStep1"></li>
+            <li data-i18n="donateStep2"></li>
+            <li data-i18n="donateStep3"></li>
+          </ol>
+          <div class="row">
+            <button class="primary" id="donateCopy" data-i18n="donateCopy"></button>
+          </div>
+          <div class="small" data-i18n="donateNote"></div>
         </div>
-        <div class="small" data-i18n="hkHint"></div>
       </div>
     </section>
-    <section class="win" data-win="titlebars">
-      <div class="bar"><svg class="ico"><use href="#i-brush"/></svg><h2 data-i18n="titlebars"></h2>
-        <span class="ctl"><button class="wbtn" data-collapse>—</button></span></div>
-      <div class="body" style="display:grid;gap:8px">
-        <label class="switch"><input type="checkbox" id="tbHide"><span class="track"></span><span class="lbl" data-i18n="tbHide"></span></label>
-        <div class="row"><span class="k" data-i18n="tbDefault"></span><span id="tbDefault" style="margin-left:auto"></span></div>
-        <div class="row"><span class="k" data-i18n="sepWidth"></span>
-          <span class="stepper" style="margin-left:auto"><button data-sep="-">−</button><span id="sepWidth"></span><button data-sep="+">+</button></span></div>
-        <div class="row"><span class="k" data-i18n="sepColor"></span><span id="sepColor" style="margin-left:auto"></span></div>
-        <div class="row"><span class="k" data-i18n="pvShow"></span><select id="sepShow" style="margin-left:auto">
-          <option value="always" data-i18n="sepAlways"></option><option value="eve" data-i18n="pvEve"></option></select></div>
-        <div class="small" data-i18n="sepHint"></div>
-        <ul class="list" id="tbChars"></ul>
-        <div class="small" data-i18n="tbHint"></div>
+    <section class="win" data-win="credits">
+      <div class="bar"><svg class="ico"><use href="#i-pilot"/></svg><h2 data-i18n="creditsTitle"></h2></div>
+      <div class="body about-credits">
+        <p data-i18n="creditsText"></p>
+        <p class="small" data-i18n="creditsIcons"></p>
+        <p class="small" data-i18n="aboutLegal"></p>
       </div>
     </section>
-    <section class="win" data-win="clients">
-      <div class="bar"><svg class="ico"><use href="#i-pilot"/></svg><h2 data-i18n="clients"></h2><span class="extra" id="clientCount"></span>
-        <span class="ctl"><button class="wbtn" data-collapse>—</button></span></div>
-      <div class="body"><ul class="list" id="clients"></ul></div>
-    </section>
-    <section class="win" data-win="events">
-      <div class="bar"><svg class="ico"><use href="#i-bell"/></svg><h2 data-i18n="events"></h2>
-        <span class="ctl" style="margin-left:auto"><button class="wbtn" id="clearlog" title="">⌫</button><button class="wbtn" data-collapse>—</button></span></div>
-      <div class="body"><ul class="list" id="log"></ul></div>
-    </section>
-    <section class="win" data-win="monitors">
-      <div class="bar"><svg class="ico"><use href="#i-monitor"/></svg><h2 data-i18n="monitors"></h2>
-        <span class="ctl"><button class="wbtn" data-collapse>—</button></span></div>
-      <div class="body"><ul class="list" id="monitors"></ul></div>
-    </section>
-  </aside>
+  </div>
 </main>
 <div id="toasts"></div>
+<div id="tip" role="tooltip"></div>
+<div id="actmenu" role="menu"></div>
 <div id="gltip"></div>
 <div id="sppop" class="pop">
-  <div class="row"><b id="spvTitle"></b><button class="wbtn" id="spvClose" style="margin-left:auto">✕</button></div>
+  <div class="row"><b id="spvTitle"></b><span class="info" data-tip="spvHint">i</span><button class="wbtn" id="spvClose" style="margin-left:auto"><svg class="ic"><use href="#i-close"/></svg></button></div>
   <label class="f"><span data-i18n="spvMode"></span><select id="spvMode">
     <option value="" data-i18n="pvOff"></option><option value="stack" data-i18n="spvStack"></option><option value="all" data-i18n="pvAll"></option>
   </select></label>
@@ -461,15 +288,13 @@
   <label class="f"><span data-i18n="pvShow"></span><select id="spvShow">
     <option value="always" data-i18n="pvAlways"></option><option value="eve" data-i18n="pvEve"></option>
   </select></label>
-  <div class="small" data-i18n="spvHint"></div>
 </div>
 <div id="hkpop" class="pop">
-  <div class="row"><b id="hkTitle"></b><button class="wbtn" id="hkClose" style="margin-left:auto">✕</button></div>
+  <div class="row"><b id="hkTitle"></b><span class="info" data-tip="hkStackHint">i</span><button class="wbtn" id="hkClose" style="margin-left:auto"><svg class="ic"><use href="#i-close"/></svg></button></div>
   <input id="hkInput" class="keycap" readonly>
-  <div class="small" data-i18n="hkStackHint"></div>
 </div>
 <div id="ofpop" class="pop">
-  <div class="row"><b id="ofTitle"></b><button class="wbtn" id="ofClose" style="margin-left:auto">✕</button></div>
+  <div class="row"><b id="ofTitle"></b><span class="info" data-tip="ofHint">i</span><button class="wbtn" id="ofClose" style="margin-left:auto"><svg class="ic"><use href="#i-close"/></svg></button></div>
   <div class="row" id="ofMaxRow">
     <span class="k" data-i18n="maxChars"></span>
     <span class="stepper"><button data-of="m-">−</button><span id="ofMax"></span><button data-of="m+">+</button></span>
@@ -477,18 +302,17 @@
   <div class="small" id="ofLastHint" data-i18n="ofLastHint"></div>
   <div class="row"><button data-of="up" data-i18n="ofUp"></button><button data-of="down" data-i18n="ofDown"></button>
     <button data-of="remove" class="danger" data-i18n="ofRemove"></button></div>
-  <div class="small" data-i18n="ofHint"></div>
 </div>
 <div id="subpop">
-  <div class="row"><b id="spTitle"></b><button class="wbtn" id="spClose" style="margin-left:auto">✕</button></div>
+  <div class="row"><b id="spTitle"></b><span class="info" data-tip="subHint">i</span><button class="wbtn" id="spClose" style="margin-left:auto"><svg class="ic"><use href="#i-close"/></svg></button></div>
   <div class="row">
     <span class="k" data-i18n="cols"></span><span class="stepper"><button data-sp="c-">−</button><span id="spCols"></span><button data-sp="c+">+</button></span>
     <span class="k" data-i18n="rows"></span><span class="stepper"><button data-sp="r-">−</button><span id="spRows"></span><button data-sp="r+">+</button></span>
   </div>
   <div class="row"><button id="spEven" data-i18n="evenLines"></button><button id="spMerge" class="danger" data-i18n="mergeCell"></button></div>
-  <div class="small" data-i18n="subHint"></div>
 </div>
 <div id="cellpop">
+  <div class="row"><b data-i18n="cpTitle"></b><span class="info" data-tip="cpHint">i</span></div>
   <label class="f"><span data-i18n="cpLabel"></span><input id="cpLabel" size="24"></label>
   <label class="f"><span data-i18n="cpPreview"></span><select id="cpPreview">
     <option value="" data-i18n="pvOff"></option><option value="all" data-i18n="pvAll"></option><option value="hidden" data-i18n="pvHidden"></option>
@@ -496,1349 +320,28 @@
   <label class="f" id="cpShowWrap"><span data-i18n="pvShow"></span><select id="cpShow">
     <option value="always" data-i18n="pvAlways"></option><option value="eve" data-i18n="pvEve"></option>
   </select></label>
-  <label class="f" id="cpMatchWrap"><span data-i18n="cpMatch"></span><input id="cpMatch" list="cpWins" size="24"></label>
+  <div id="cpWinOpts" style="display:grid;gap:8px">
+    <label class="f"><span data-i18n="cpMatch"></span><input id="cpMatch" list="cpWins" size="24"></label>
+    <label class="switch"><input type="checkbox" id="cpStack"><span class="track"></span><span class="lbl" data-i18n="cpStack"></span><span class="info" data-tip="cpStackHint">i</span></label>
+    <label class="switch"><input type="checkbox" id="cpCatch"><span class="track"></span><span class="lbl" data-i18n="cpCatch"></span><span class="info" data-tip="cpCatchHint">i</span></label>
+    <label class="f" id="cpExcludeWrap"><span data-i18n="cpExclude"></span><input id="cpExclude" size="24" placeholder="firefox|dolphin"></label>
+    <label class="switch"><input type="checkbox" id="cpKeepSize"><span class="track"></span><span class="lbl" data-i18n="cpKeepSize"></span><span class="info" data-tip="cpKeepSizeHint">i</span></label>
+  </div>
   <datalist id="cpWins"></datalist>
-  <div class="small" data-i18n="cpHint"></div>
   <div class="row" style="justify-content:flex-end"><button id="cpCancel" data-i18n="cancel"></button><button class="primary" id="cpSave" data-i18n="ok"></button></div>
 </div>
 
-<script>
-// ============================================================ i18n
-const I18N = {
-  de: {
-    live: "Live", autoShort: "Neue Clients automatisch platzieren", profiles: "Profile", name: "Name", description: "Beschreibung",
-    focusEnd: "Fokus am Ende", none: "– keiner –", apply: "Anwenden", save: "Speichern", discard: "Verwerfen",
-    duplicate: "Duplizieren", makeDefault: "Als Standard", delete: "Löschen", refresh: "Aktualisieren",
-    layout: "Layout", layoutHint: "In Felder ziehen · auf belegtes Feld = stapeln · Shift = tauschen · zurück in die Palette = entfernen",
-    stack: "Stapel · {n}", toTop: "Nach oben (sichtbar)",
-    useMonitor: "Monitor verwenden", unused: "nicht verwendet",
-    pvShow: "Sichtbar", pvAlways: "immer (wie EVE-O Preview)", pvEve: "nur solange ein EVE-Client aktiv ist",
-    setStackPreview: "Vorschau-Leiste auf diesem Stapel", spvTitle: "Vorschau-Leiste auf {cell}", spvMode: "Zeigen",
-    spvStack: "die anderen (verdeckten) Clients dieses Stapels", spvEdge: "Kante", spvSize: "Grösse",
-    edgeBottom: "unten", edgeTop: "oben", edgeLeft: "links", edgeRight: "rechts",
-    spvStackShort: "verdeckte", spvAllShort: "alle",
-    spvHint: "Live-Bilder als Leiste über dem Stapel, Klick wechselt zum Client. „Verdeckte“ verschwindet automatisch, wenn nichts verdeckt ist.",
-    cpPreview: "Vorschau der Clients (wie EVE-O Preview)", pvOff: "– keine –", pvAll: "Vorschau: alle Clients",
-    pvHidden: "Vorschau: nur verdeckte Clients", preview: "Vorschau",
-    dragCellType: "Ziehen, um es auf ein anderes Feld zu verschieben", subgridTarget: "Ein Subgrid kann nur auf eine normale, nicht frei gehaltene Zelle ohne eigenes Subgrid verschoben werden.",
-    lockShort: "Fixieren", lockHelp: "EVE-Clients an ihrem Platz fixieren: Verschieben, Grösse ändern, Maximieren oder Kacheln springt sofort zurück.",
-    profileHotkey: "Kurzbefehl", hotkeys: "Kurzbefehle", hkNext: "Nächstes Layout", hkPrev: "Vorheriges Layout",
-    hkCycle: "Aktiven Stapel durchschalten", pressKey: "Taste drücken …", noKey: "– keiner –",
-    hkHint: "Globale KDE-Kurzbefehle (auch in den Systemeinstellungen sichtbar). Feld anklicken, Tastenkombination drücken; Entf/Rücktaste löscht, Esc bricht ab. Aktiv, solange fcwm web oder watch läuft. Ein Layout-Wechsel macht das Layout auch für die Auto-Platzierung aktiv.",
-    hkStackHint: "Schaltet die Clients dieses Feldes reihum nach vorn. Gilt, wenn dieses Profil aktiv ist.",
-    stackHotkey: "Kurzbefehl für {cell}", setHotkey: "Kurzbefehl für dieses Feld (Stapel durchschalten)",
-    hkSaved: "Kurzbefehle gespeichert", hkFeature: "Kurzbefehle und Fixieren brauchen KWin (Plasma).",
-    titlebars: "Titelleisten", tbHide: "Titelleisten der EVE-Clients ausblenden", tbDefault: "Farbe für alle EVE-Clients",
-    tbHint: "Wird über eigene KWin-Fensterregeln umgesetzt (fcwm-…), auch ohne laufendes Tool. Eine Farbe pro Charakter hat Vorrang.",
-    tbNone: "keine", tbSaved: "Titelleisten aktualisiert – Clients neu ausgerichtet", clearColor: "Farbe entfernen",
-    sepWidth: "Trennlinie zwischen Clients", sepColor: "Farbe der Trennlinie", off: "aus", sepSaved: "Trennlinie aktualisiert",
-    sepAlways: "immer",
-    sepHint: "Nur dort, wo zwei Fenster aneinanderstossen – eine Linie pro Kante, nicht am Rand. „Immer“ zeichnet sie auch über anderen Programmen, die eine Lücke überdecken.",
-    makeOverflow: "Als Überlauf-Feld verwenden", overflowN: "Überlauf {n}", maxChars: "Max. Charaktere",
-    ofLastHint: "Das letzte Überlauf-Feld nimmt immer alle übrigen Clients auf – hier gibt es kein Maximum.",
-    ofUp: "▲ früher", ofDown: "▼ später", ofRemove: "Kein Überlauf mehr",
-    ofHint: "Überlauf-Felder werden nicht normal aufgefüllt. Sind alle Auffüll-Felder belegt, landen weitere Clients der Reihe nach hier (als Stapel).",
-    splitCell: "Zelle in ein Subgrid teilen (kleinere Clients)", editSubgrid: "Subgrid bearbeiten",
-    subgridOf: "Subgrid in {slot}", mergeCell: "Teilung aufheben",
-    subHint: "Teilung aufheben: Charaktere aus den Subzellen landen als Stapel in der ganzen Zelle. Linien im Subgrid lassen sich ebenfalls ziehen.",
-    blockCell: "Feld frei halten (z. B. Browser, RIFT)", unblockCell: "Wieder für Clients freigeben", editCell: "Name / Fenster bearbeiten",
-    keptFree: "Frei gehalten", keptFreeSub: "keine EVE-Clients", notOpen: "nicht offen",
-    dropOnBlocked: "Dieses Feld ist frei gehalten – erst mit ✕ freigeben.",
-    unpinnedForBlock: "Zuweisung entfernt, weil das Feld frei gehalten wird: {list}",
-    cpLabel: "Name", cpMatch: "Fenster hier platzieren (optional)", cancel: "Abbrechen", ok: "OK",
-    cpHint: "Vorschau: Live-Bilder der EVE-Clients, Klick wechselt zum Client. Sonst optional ein Fenster hier platzieren: Titel/Fensterklasse aus der Liste oder ein Muster (Regex, z. B. RIFT|Brave) – es wird beim Anwenden mit verschoben.",
-    dragLine: "Rasterlinie ziehen (Shift = auf 1/12 einrasten)",
-    dragLineRow: "Linie ziehen: nur diese Zeile · Strg = ganze Linie über alle Zeilen · Shift = auf 1/12 einrasten",
-    allRows: "alle Zeilen", rowN: "Zeile {n}", evenLines: "Linien gleichmässig",
-    add: "Hinzufügen", addPlaceholder: "Charakter hinzufügen (auch offline)",
-    lgPinned: "fest zugewiesen", lgAuto: "automatisch", lgOffline: "zugewiesen, offline",
-    toolsHint: "Feld-Werkzeuge beim Überfahren: ⇥ breiter · ⤓ höher · {pin} festpinnen · ▲ im Stapel nach oben · ✕ entfernen · ⊘ frei halten · ⊞ unterteilen · ⇊ Überlauf · ⌨ Kurzbefehl · ▣ Vorschau-Leiste · ◆ Linien ziehen",
-    configFile: "Konfiguration", editRaw: "Datei direkt bearbeiten",
-    editRawHint: "Wird vor dem Speichern geprüft. Ungespeicherte Änderungen im Editor oben gehen dabei verloren.",
-    saveFile: "Datei speichern", saved: "Gespeichert",
-    reloadCfg: "Konfiguration neu laden", restartWm: "fcwm neu starten",
-    reloadHint: "Neu laden liest config.yaml erneut ein (z. B. nach Handbearbeitung) – Fenster werden nicht verschoben.",
-    cfgReloaded: "Konfiguration neu geladen", restartingUi: "fcwm startet neu …", restartedUi: "fcwm wurde neu gestartet",
-    restartFailed: "fcwm antwortet nach dem Neustart nicht – Log prüfen (journalctl --user -u fcwm)",
-    restartDirty: "Ungespeicherte Änderungen gehen beim Neustart verloren. Trotzdem neu starten?",
-    autoTitle: "Auto-Platzierung", collapse: "Einklappen",
-    bannerOn: "Auto-Platzierung aktiv – {profile}", bannerOff: "Auto-Platzierung inaktiv",
-    autoHelp: "Neu eingeloggte Clients werden automatisch in ihr Feld verschoben. Mehrere gleichzeitige Logins werden gesammelt und gemeinsam platziert; bereits platzierte Clients bleiben, wo sie sind.",
-    profile: "Profil", listener: "Listener", defaultProfile: "Standardprofil", clients: "Eingeloggte Clients",
-    events: "Ereignisse", clear: "Leeren", monitors: "Monitore", noClients: "Keine EVE-Clients eingeloggt",
-    noChars: "Keine Charaktere bekannt – einloggen oder unten hinzufügen.",
-    status: "Backend: {backend} · {clients} Clients · {monitors} Monitore",
-    notConfigured: "nicht konfiguriert", notConnected: "nicht angeschlossen", cols: "Spalten", rows: "Zeilen",
-    fillFree: "freie Felder auffüllen", defaultGrid: "Standardraster", resetTo: "auf {g} zurück",
-    loggedIn: "eingeloggt", notLoggedIn: "nicht eingeloggt", noSpace: "kein Platz", auto: "auto",
-    pinHere: "An dieser Stelle festpinnen", wider: "breiter (über Spalten)", taller: "höher (über Zeilen)", remove: "Zuweisung entfernen",
-    unplaced: "Kein freier Platz für: {list} – Feld zuweisen oder „Auffüllen“ aktivieren.",
-    droppedGrid: "Ausserhalb des neuen Rasters, Zuweisung entfernt: {list}",
-    newProfile: "Neues Profil", copy: "Kopie", unsaved: "ungespeichert",
-    profileSaved: "Profil „{name}“ gespeichert", profileDeleted: "Profil „{name}“ gelöscht", defaultSet: "Standardprofil gesetzt",
-    confirmDelete: "Profil „{name}“ wirklich löschen?", placedN: "{n} Fenster platziert ({name})",
-    evLogin: "{char} eingeloggt", evLoginAuto: "{char} eingeloggt – wird platziert", evClosed: "{char} geschlossen",
-    evPlaced: "{char} → {slot}", evUnplaced: "Kein freier Platz für {list}", evAutoOn: "Auto-Platzierung aktiviert ({profile})",
-    evAutoOff: "Auto-Platzierung deaktiviert", evProfile: "Layout „{name}“ angewendet ({n} Fenster)", tProfile: "Layout",
-    activeProfile: "Aktives Layout (Auto-Platzierung, Kurzbefehle)", tNew: "Neuer Client", tPlaced: "Platziert", tError: "Fehler", tAuto: "Auto-Platzierung",
-    leaveWarn: "Ungespeicherte Änderungen",
-  },
-  en: {
-    live: "Live", autoShort: "Place new clients automatically", profiles: "Profiles", name: "Name", description: "Description",
-    focusEnd: "Focus at the end", none: "– none –", apply: "Apply", save: "Save", discard: "Discard",
-    duplicate: "Duplicate", makeDefault: "Set default", delete: "Delete", refresh: "Refresh",
-    layout: "Layout", layoutHint: "Drag onto slots · onto an occupied slot = stack · Shift = swap · back onto the palette = remove",
-    stack: "Stack · {n}", toTop: "Move to top (visible)",
-    useMonitor: "Use monitor", unused: "not used",
-    pvShow: "Visible", pvAlways: "always (like EVE-O Preview)", pvEve: "only while an EVE client is active",
-    setStackPreview: "Preview strip on this stack", spvTitle: "Preview strip on {cell}", spvMode: "Show",
-    spvStack: "the other (hidden) clients of this stack", spvEdge: "Edge", spvSize: "Size",
-    edgeBottom: "bottom", edgeTop: "top", edgeLeft: "left", edgeRight: "right",
-    spvStackShort: "hidden", spvAllShort: "all",
-    spvHint: "Live images as a strip over the stack, click switches to the client. \"Hidden\" disappears automatically when nothing is hidden.",
-    cpPreview: "Client preview (like EVE-O Preview)", pvOff: "– none –", pvAll: "Preview: all clients",
-    pvHidden: "Preview: hidden clients only", preview: "Preview",
-    dragCellType: "Drag to move it to another slot", subgridTarget: "A subgrid can only be moved to a normal cell that isn't kept free and has no subgrid.",
-    lockShort: "Lock", lockHelp: "Lock EVE clients in place: moving, resizing, maximizing or tiling snaps straight back.",
-    profileHotkey: "Hotkey", hotkeys: "Hotkeys", hkNext: "Next layout", hkPrev: "Previous layout",
-    hkCycle: "Cycle active stack", pressKey: "Press keys …", noKey: "– none –",
-    hkHint: "Global KDE shortcuts (also visible in System Settings). Click a field and press a key combination; Del/Backspace clears, Esc cancels. Active while fcwm web or watch runs. Switching layouts also makes it the active layout for auto placement.",
-    hkStackHint: "Brings the clients of this slot to the front in turn. Active while this profile is active.",
-    stackHotkey: "Hotkey for {cell}", setHotkey: "Hotkey for this slot (cycle stack)",
-    hkSaved: "Hotkeys saved", hkFeature: "Hotkeys and locking need KWin (Plasma).",
-    titlebars: "Title bars", tbHide: "Hide title bars of EVE clients", tbDefault: "Color for all EVE clients",
-    tbHint: "Implemented as our own KWin window rules (fcwm-…), works even when the tool isn't running. A per-character color wins.",
-    tbNone: "none", tbSaved: "Title bars updated – clients realigned", clearColor: "Remove color",
-    sepWidth: "Separator between clients", sepColor: "Separator color", off: "off", sepSaved: "Separator updated",
-    sepAlways: "always",
-    sepHint: "Only where two windows meet – one line per edge, none at the outer border. \"Always\" also draws them over other programs that cover a gap.",
-    makeOverflow: "Use as overflow slot", overflowN: "Overflow {n}", maxChars: "Max characters",
-    ofLastHint: "The last overflow slot always takes all remaining clients – there is no maximum here.",
-    ofUp: "▲ earlier", ofDown: "▼ later", ofRemove: "No overflow",
-    ofHint: "Overflow slots are not filled normally. Once all fill slots are taken, further clients go here in order (as a stack).",
-    splitCell: "Split cell into a subgrid (smaller clients)", editSubgrid: "Edit subgrid",
-    subgridOf: "Subgrid in {slot}", mergeCell: "Merge cell",
-    subHint: "Merging puts characters from the sub-cells as a stack into the whole cell. Subgrid lines can be dragged too.",
-    blockCell: "Keep slot free (e.g. browser, RIFT)", unblockCell: "Release for clients again", editCell: "Edit name / window",
-    keptFree: "Kept free", keptFreeSub: "no EVE clients", notOpen: "not open",
-    dropOnBlocked: "This slot is kept free – release it with ✕ first.",
-    unpinnedForBlock: "Assignment removed because the slot is kept free: {list}",
-    cpLabel: "Name", cpMatch: "Place this window here (optional)", cancel: "Cancel", ok: "OK",
-    cpHint: "Preview: live images of the EVE clients, click switches to the client. Otherwise optionally place a window here: title/window class from the list or a pattern (regex, e.g. RIFT|Brave) – it is moved along when applying.",
-    dragLine: "Drag grid line (Shift = snap to 1/12)",
-    dragLineRow: "Drag line: this row only · Ctrl = whole line across all rows · Shift = snap to 1/12",
-    allRows: "all rows", rowN: "Row {n}", evenLines: "even lines",
-    add: "Add", addPlaceholder: "Add character (offline too)",
-    lgPinned: "pinned", lgAuto: "automatic", lgOffline: "pinned, offline",
-    toolsHint: "Slot tools on hover: ⇥ wider · ⤓ taller · {pin} pin · ▲ to top of stack · ✕ remove · ⊘ keep free · ⊞ split · ⇊ overflow · ⌨ hotkey · ▣ preview strip · ◆ drag lines",
-    configFile: "Configuration", editRaw: "Edit file directly",
-    editRawHint: "Validated before saving. Unsaved changes in the editor above will be lost.",
-    saveFile: "Save file", saved: "Saved",
-    reloadCfg: "Reload config", restartWm: "Restart fcwm",
-    reloadHint: "Reload re-reads config.yaml (e.g. after editing it by hand) – windows are not moved.",
-    cfgReloaded: "Configuration reloaded", restartingUi: "fcwm is restarting …", restartedUi: "fcwm restarted",
-    restartFailed: "fcwm does not respond after restarting – check the log (journalctl --user -u fcwm)",
-    restartDirty: "Unsaved changes will be lost when restarting. Restart anyway?",
-    autoTitle: "Auto placement", collapse: "Collapse",
-    bannerOn: "Auto placement active – {profile}", bannerOff: "Auto placement inactive",
-    autoHelp: "Newly logged-in clients are moved to their slot automatically. Several simultaneous logins are batched and placed together; clients already placed stay where they are.",
-    profile: "Profile", listener: "Listener", defaultProfile: "Default profile", clients: "Logged-in clients",
-    events: "Events", clear: "Clear", monitors: "Monitors", noClients: "No EVE clients logged in",
-    noChars: "No characters known – log in or add one below.",
-    status: "Backend: {backend} · {clients} clients · {monitors} monitors",
-    notConfigured: "not configured", notConnected: "not connected", cols: "Columns", rows: "Rows",
-    fillFree: "fill free slots", defaultGrid: "default grid", resetTo: "reset to {g}",
-    loggedIn: "logged in", notLoggedIn: "not logged in", noSpace: "no space", auto: "auto",
-    pinHere: "Pin at this position", wider: "wider (span columns)", taller: "taller (span rows)", remove: "Remove assignment",
-    unplaced: "No free slot for: {list} – assign a slot or enable “fill”.",
-    droppedGrid: "Outside the new grid, assignment removed: {list}",
-    newProfile: "New profile", copy: "copy", unsaved: "unsaved",
-    profileSaved: "Profile “{name}” saved", profileDeleted: "Profile “{name}” deleted", defaultSet: "Default profile set",
-    confirmDelete: "Really delete profile “{name}”?", placedN: "{n} window(s) placed ({name})",
-    evLogin: "{char} logged in", evLoginAuto: "{char} logged in – placing", evClosed: "{char} closed",
-    evPlaced: "{char} → {slot}", evUnplaced: "No free slot for {list}", evAutoOn: "Auto placement enabled ({profile})",
-    evAutoOff: "Auto placement disabled", evProfile: "Layout “{name}” applied ({n} windows)", tProfile: "Layout",
-    activeProfile: "Active layout (auto placement, hotkeys)", tNew: "New client", tPlaced: "Placed", tError: "Error", tAuto: "Auto placement",
-    leaveWarn: "Unsaved changes",
-  },
-};
-let lang = "de";
-try { lang = localStorage.getItem("fcwm.lang") || (navigator.language || "en").slice(0, 2); } catch {}
-if (!I18N[lang]) lang = "en";
-const PIN = `<svg class="pin"><use href="#i-pin"/></svg>`;
-const t = (k, p = {}) => (I18N[lang][k] ?? I18N.en[k] ?? k).replace(/\{(\w+)\}/g, (_, n) => p[n] ?? "");
-function applyStatic() {
-  document.documentElement.lang = lang;
-  document.querySelectorAll("[data-i18n]").forEach(el => el.textContent = t(el.dataset.i18n));
-  $("newchar").placeholder = t("addPlaceholder");
-  document.querySelector('[data-i18n="toolsHint"]').innerHTML = esc(t("toolsHint", {pin: "@@PIN@@"})).replace("@@PIN@@", PIN);
-  $("lang").value = lang;
-  $("clearlog").title = t("clear");
-  document.querySelectorAll("[data-collapse]").forEach(b => b.title = t("collapse"));
-}
-
-// ============================================================ Grundlagen
-const $ = (id) => document.getElementById(id);
-const DT = "application/x-fcwm-char";
-let state = null, cur = null, plan = null, auto = null;
-const drafts = {};
-let previewSeq = 0, newCounter = 0, refreshTimer = null;
-let extraChars = [];
-try { extraChars = JSON.parse(localStorage.getItem("fcwm.extraChars") || "[]"); } catch {}
-
-const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const clone = (o) => JSON.parse(JSON.stringify(o));
-
-async function api(path, body) {
-  const opt = {headers: {"X-Lang": lang}};
-  if (body !== undefined) Object.assign(opt, {method: "POST", body: JSON.stringify(body)}, {headers: {"X-Lang": lang, "Content-Type": "application/json"}});
-  const r = await fetch(path, opt);
-  const data = (r.headers.get("content-type") || "").includes("json") ? await r.json() : await r.text();
-  if (!r.ok) throw new Error(data.error || data);
-  return data;
-}
-function flash(text, cls = "ok") {
-  $("msgs").innerHTML = `<div class="msg ${cls}">${esc(text)}</div>`;
-  if (cls === "ok") setTimeout(() => { $("msgs").innerHTML = ""; }, 4000);
-}
-function toast(title, text, cls = "") {
-  const el = document.createElement("div");
-  el.className = `toast ${cls}`;
-  el.innerHTML = `<div class="tt">${esc(title)}</div>${esc(text)}`;
-  $("toasts").appendChild(el);
-  setTimeout(() => el.remove(), 5000);
-  while ($("toasts").children.length > 5) $("toasts").firstChild.remove();
-}
-
-// ============================================================ Zustand
-function draft() {
-  if (!drafts[cur]) drafts[cur] = {name: cur, oldName: cur, model: clone(state.models[cur]), dirty: false};
-  return drafts[cur];
-}
-const model = () => draft().model;
-function changed() { draft().dirty = true; renderHeader(); preview(); }
-
-async function load(keep = true) {
-  $("refresh").disabled = true;
-  try {
-    const first = !state;
-    state = await api("/api/state");
-    const keys = [...Object.keys(state.models), ...Object.keys(drafts).filter(k => !state.models[k])];
-    if (!keep || !cur || !keys.includes(cur)) cur = state.default_profile || keys[0] || null;
-    if (!cur) newProfile();
-    if (first) state.events.forEach(e => logEvent(e, false));
-    setAuto(state.auto);
-    renderHeader(); renderSidebar(); renderSettings();
-    await preview();
-  } catch (e) { flash(e.message, "err"); }
-  finally { $("refresh").disabled = false; }
-}
-function scheduleRefresh() { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => load(), 700); }
-
-async function preview() {
-  const seq = ++previewSeq, d = draft();
-  try {
-    const p = await api("/api/preview", {name: d.name, model: d.model});
-    if (seq !== previewSeq) return;
-    plan = p; renderEditor();
-  } catch (e) {
-    if (seq === previewSeq) $("planmsgs").innerHTML = `<div class="msg err">${esc(e.message)}</div>`;
-  }
-}
-
-// ============================================================ Modell-Operationen
-// Ein Platz ist (Monitor, Slot, Sub): Sub ist null für eine normale Zelle, sonst die Zelle im
-// Subgrid dieses Slots ("center:1.3").
-const subOf = (x) => (x.sub === undefined || x.sub === null || x.sub === "") ? null : +x.sub;
-const sl = (slot, sub) => sub === null || sub === undefined ? `${slot}` : `${slot}.${sub}`;
-const placeOf = (el) => [el.dataset.mon, +el.dataset.slot, el.dataset.sub === "" || el.dataset.sub === undefined ? null : +el.dataset.sub];
-const placeAttrs = (mon, slot, sub) => `data-mon="${esc(mon)}" data-slot="${slot}" data-sub="${sub ?? ""}"`;
-
-const gridOf = (alias) => model().grids[alias] || state.monitor_config[alias].grid;
-// Subgrids: model().subgrids = [{monitor, slot, grid: [c, r], weights: [cw|null, rw|null] | null}]
-const subgridOf = (mon, slot) => (model().subgrids || []).find(g => g.monitor === mon && g.slot === slot);
-
-// Gewichte der Rasterlinien. Gespeichert als [spalten|null, zeilen|null, {zeile: spalten}|null] –
-// am Monitor (model().weights[alias]) oder am Subgrid (sg.weights). Ziel: slot = null -> Monitor-Raster.
-function weightEntry(alias, slot, create = false) {
-  const m = model();
-  if (slot !== null) {
-    const sg = subgridOf(alias, slot);
-    if (!sg) return null;
-    if (create && !sg.weights) sg.weights = [null, null, null];
-    return sg.weights;
-  }
-  m.weights = m.weights || {};
-  if (create && !m.weights[alias]) m.weights[alias] = [null, null, null];
-  return m.weights[alias] || null;
-}
-function cleanEntry(alias, slot) {
-  const e = weightEntry(alias, slot);
-  if (!e) return;
-  while (e.length < 3) e.push(null);
-  if (e[2] && !Object.keys(e[2]).length) e[2] = null;
-  if (!e[0] && !e[1] && !e[2]) {
-    if (slot !== null) subgridOf(alias, slot).weights = null; else delete model().weights[alias];
-  }
-}
-const gridFor = (alias, slot) => slot === null ? gridOf(alias) : subgridOf(alias, slot).grid;
-function weightsOf(alias, axis, slot = null, row = null) {
-  const n = gridFor(alias, slot)[axis], e = weightEntry(alias, slot) || [];
-  const ok = (w) => w && w.length === n;
-  if (axis === 0 && row !== null && e[2] && ok(e[2][row])) return e[2][row];
-  return ok(e[axis]) ? e[axis] : Array(n).fill(1);
-}
-const sameRatio = (a, b) => {
-  const sa = a.reduce((x, y) => x + y, 0), sb = b.reduce((x, y) => x + y, 0);
-  return a.length === b.length && a.every((x, i) => Math.abs(x / sa - b[i] / sb) < 1e-4);
-};
-// w = null setzt die Achse zurück (bei Spalten inkl. aller Zeilen-Ausnahmen)
-function setWeights(alias, axis, w, slot = null, row = null) {
-  const e = weightEntry(alias, slot, true);
-  if (!e) return;
-  while (e.length < 3) e.push(null);
-  if (axis === 0 && row !== null) {           // nur diese Zeile
-    const rc = e[2] || {};
-    if (!w || sameRatio(w, weightsOf(alias, 0, slot))) delete rc[row]; else rc[row] = w;
-    e[2] = rc;
-  } else {
-    const uniform = !w || w.every(x => Math.abs(x - w[0]) < 1e-6);
-    e[axis] = uniform ? null : w;
-    if (axis === 0 && !w) e[2] = null;
-  }
-  cleanEntry(alias, slot);
-}
-function dropRowOverrides(alias, slot, rows) {   // Zeilen-Ausnahmen jenseits der neuen Zeilenzahl entfernen
-  const e = weightEntry(alias, slot);
-  if (e && e[2]) { for (const r of Object.keys(e[2])) if (+r >= rows) delete e[2][r]; cleanEntry(alias, slot); }
-}
-// Belegte Plätze einer Zuweisung als Schlüssel: "3" (Hauptzelle) bzw. "1.2" (Subgrid-Zelle)
-function covered(a) {
-  if (subOf(a) !== null) return [sl(a.slot, subOf(a))];
-  const [cols] = gridOf(a.monitor), c0 = a.slot % cols, r0 = Math.floor(a.slot / cols), out = [];
-  for (let r = 0; r < a.span[1]; r++) for (let c = 0; c < a.span[0]; c++) out.push(`${(r0 + r) * cols + c0 + c}`);
-  return out;
-}
-// Stapel = mehrere Zuweisungen auf exakt demselben Platz; der erste Eintrag in model().assign liegt oben.
-const sameStack = (a, o) => o !== a && o.monitor === a.monitor && o.slot === a.slot && subOf(o) === subOf(a);
-const stackOf = (a) => model().assign.filter(o => o === a || sameStack(a, o));
-function fits(a) {
-  if (subOf(a) !== null) return true;
-  const [cols, rows] = gridOf(a.monitor), c0 = a.slot % cols, r0 = Math.floor(a.slot / cols);
-  if (c0 + a.span[0] > cols || r0 + a.span[1] > rows) return false;
-  const mine = covered(a);
-  if (a.span[0] * a.span[1] > 1 && mine.some(k => subgridOf(a.monitor, +k))) return false;  // nicht über Subgrids spannen
-  const set = new Set(mine);
-  return !model().assign.some(o => o !== a && !sameStack(a, o) && o.monitor === a.monitor && covered(o).some(k => set.has(k)));
-}
-function toTop(a) {   // a im Array vor das erste Stapel-Mitglied schieben
-  const m = model(), first = m.assign.findIndex(o => o === a || sameStack(a, o));
-  m.assign.splice(m.assign.indexOf(a), 1);
-  m.assign.splice(first, 0, a);
-}
-function assignTo(char, monitor, slot, sub = null, swap = false, pinAuto = true) {
-  const m = model(), prev = m.assign.find(a => a.char === char), key = sl(slot, sub);
-  if (prev && prev.monitor === monitor && covered(prev).includes(key)) return;
-  let occupants = m.assign.filter(o => o !== prev && o.monitor === monitor && covered(o).includes(key));
-  if (!occupants.length && !swap && pinAuto) {
-    // Platz ist nur automatisch belegt: diese Clients hier festpinnen, damit gestapelt wird
-    const autos = plan.placements.filter(p => p.auto && p.char !== char && p.monitor === monitor && p.slot === slot && subOf(p) === sub);
-    occupants = autos.map(p => ({char: p.char, monitor, slot, sub, span: [1, 1]}));
-    m.assign.push(...occupants);
-  }
-  const a = prev || {char, monitor, slot, sub, span: [1, 1]};
-  if (!prev) m.assign.push(a);
-  if (occupants.length && swap) {         // Shift: tauschen
-    for (const o of occupants) {
-      if (prev) { o.monitor = prev.monitor; o.slot = prev.slot; o.sub = subOf(prev); o.span = [1, 1]; }
-      else m.assign.splice(m.assign.indexOf(o), 1);
-    }
-    a.monitor = monitor; a.slot = slot; a.sub = sub;
-    if (!fits(a)) a.span = [1, 1];
-    for (const o of occupants) if (m.assign.includes(o) && !fits(o)) m.assign.splice(m.assign.indexOf(o), 1);
-  } else if (occupants.length) {          // Standard: auf den vorhandenen Stapel legen (oben)
-    const base = occupants[0];
-    a.monitor = base.monitor; a.slot = base.slot; a.sub = subOf(base);
-    a.span = subOf(base) === null ? [...base.span] : [1, 1];
-    toTop(a);
-  } else {
-    a.monitor = monitor; a.slot = slot; a.sub = sub;
-    if (sub !== null || !fits(a)) a.span = [1, 1];
-  }
-  changed();
-}
-function unassign(char) {
-  const m = model(), i = m.assign.findIndex(a => a.char === char);
-  if (i >= 0) { m.assign.splice(i, 1); changed(); }
-}
-function raiseInStack(char) {
-  const a = model().assign.find(x => x.char === char);
-  if (a) { toTop(a); changed(); }
-}
-function growSpan(char, axis) {   // gilt für den ganzen Stapel; nicht in Subgrids
-  const a = model().assign.find(x => x.char === char);
-  if (!a || subOf(a) !== null) return;
-  const stack = stackOf(a);
-  a.span[axis]++;
-  if (!fits(a)) a.span[axis] = 1;
-  stack.forEach(o => { o.span = [...a.span]; });
-  changed();
-}
-// Position (Spalte/Zeile) beim Ändern eines Rasters erhalten; null = fällt heraus
-function remap(idx, oc, cols, rows) {
-  const c = idx % oc, r = Math.floor(idx / oc);
-  return c >= cols || r >= rows ? null : r * cols + c;
-}
-function setGrid(alias, cols, rows) {
-  cols = Math.max(1, Math.min(12, cols)); rows = Math.max(1, Math.min(12, rows));
-  const [oc, or] = gridOf(alias), m = model(), dropped = [];
-  m.blocked = (m.blocked || []).filter(b => b.monitor !== alias || (b.slot = remap(b.slot, oc, cols, rows)) !== null);
-  m.subgrids = (m.subgrids || []).filter(g => g.monitor !== alias || (g.slot = remap(g.slot, oc, cols, rows)) !== null);
-  m.overflow = (m.overflow || []).filter(o => o.monitor !== alias || (o.slot = remap(o.slot, oc, cols, rows)) !== null);
-  remapHotkeys((mon, slot, sub) => mon !== alias ? [mon, slot, sub] : (n => n === null ? null : [mon, n, sub])(remap(slot, oc, cols, rows)));
-  if (cols !== oc) setWeights(alias, 0, null);   // Spaltenzahl geändert -> Linien gleichmässig
-  if (rows !== or) { setWeights(alias, 1, null); dropRowOverrides(alias, null, rows); }
-  for (const a of [...m.assign].filter(a => a.monitor === alias)) {
-    const n = remap(a.slot, oc, cols, rows);
-    if (n === null) { m.assign.splice(m.assign.indexOf(a), 1); dropped.push(a.char); continue; }
-    const c = n % cols, r = Math.floor(n / cols);
-    a.slot = n;
-    a.span = [Math.min(a.span[0], cols - c), Math.min(a.span[1], rows - r)];
-  }
-  m.grids[alias] = [cols, rows];
-  for (const a of m.assign.filter(a => a.monitor === alias)) if (!fits(a)) stackOf(a).forEach(o => { o.span = [1, 1]; });
-  if (dropped.length) flash(t("droppedGrid", {list: dropped.join(", ")}), "warn");
-  changed();
-}
-
-// ---- Subgrids (kleinere Clients in einer Zelle)
-function splitCell(mon, slot) {
-  const m = model();
-  m.subgrids = m.subgrids || [];
-  if (subgridOf(mon, slot)) return openSubPop(mon, slot);
-  // bisher genau dort gepinnte Charaktere bleiben als Stapel in der ersten Subzelle
-  for (const a of m.assign.filter(a => a.monitor === mon && subOf(a) === null && a.slot === slot)) { a.sub = 0; a.span = [1, 1]; }
-  m.subgrids.push({monitor: mon, slot, grid: [2, 2], weights: null});
-  changed();
-  setTimeout(() => openSubPop(mon, slot), 250);
-}
-function setSubgrid(mon, slot, cols, rows) {
-  const sg = subgridOf(mon, slot);
-  if (!sg) return;
-  cols = Math.max(1, Math.min(8, cols)); rows = Math.max(1, Math.min(8, rows));
-  const [oc, or] = sg.grid, m = model(), dropped = [];
-  for (const a of [...m.assign].filter(a => a.monitor === mon && a.slot === slot && subOf(a) !== null)) {
-    const n = remap(subOf(a), oc, cols, rows);
-    if (n === null) { m.assign.splice(m.assign.indexOf(a), 1); dropped.push(a.char); } else a.sub = n;
-  }
-  m.blocked = (m.blocked || []).filter(b => !(b.monitor === mon && b.slot === slot && subOf(b) !== null) ||
-                                            (b.sub = remap(subOf(b), oc, cols, rows)) !== null);
-  m.overflow = (m.overflow || []).filter(o => !(o.monitor === mon && o.slot === slot && subOf(o) !== null) ||
-                                              (o.sub = remap(subOf(o), oc, cols, rows)) !== null);
-  remapHotkeys((mo, sl_, sub) => mo !== mon || sl_ !== slot || sub === null ? [mo, sl_, sub]
-                                 : (n => n === null ? null : [mo, sl_, n])(remap(sub, oc, cols, rows)));
-  sg.grid = [cols, rows];
-  if (cols !== oc) setWeights(mon, 0, null, slot);
-  if (rows !== or) { setWeights(mon, 1, null, slot); dropRowOverrides(mon, slot, rows); }
-  if (dropped.length) flash(t("droppedGrid", {list: dropped.join(", ")}), "warn");
-  changed();
-}
-function mergeCell(mon, slot) {
-  // Subgrid auflösen: gepinnte Charaktere landen als Stapel in der ganzen Zelle
-  const m = model();
-  m.subgrids = (m.subgrids || []).filter(g => !(g.monitor === mon && g.slot === slot));
-  m.blocked = (m.blocked || []).filter(b => !(b.monitor === mon && b.slot === slot && subOf(b) !== null));
-  m.overflow = (m.overflow || []).filter(o => !(o.monitor === mon && o.slot === slot && subOf(o) !== null));
-  remapHotkeys((mo, sl_, sub) => mo === mon && sl_ === slot && sub !== null ? null : [mo, sl_, sub]);
-  for (const a of m.assign.filter(a => a.monitor === mon && a.slot === slot)) { a.sub = null; a.span = [1, 1]; }
-  $("subpop").style.display = "none";
-  changed();
-}
-function openSubPop(mon, slot) {
-  const sg = subgridOf(mon, slot), el = document.querySelector(`.subframe[data-mon="${mon}"][data-slot="${slot}"]`);
-  if (!sg || !el) return;
-  const pop = $("subpop"), r = el.getBoundingClientRect();
-  $("spTitle").textContent = t("subgridOf", {slot: `${mon}:${slot}`});
-  $("spCols").textContent = sg.grid[0]; $("spRows").textContent = sg.grid[1];
-  $("spEven").style.display = sg.weights ? "" : "none";
-  pop.dataset.mon = mon; pop.dataset.slot = slot;
-  pop.style.display = "grid";
-  pop.style.left = Math.min(innerWidth - pop.offsetWidth - 10, Math.max(10, r.left)) + "px";
-  pop.style.top = Math.min(innerHeight - pop.offsetHeight - 10, r.top + 26) + "px";
-}
-
-// ---- Freigehaltene Felder: model().blocked = [{monitor, slot, sub, label, match}]
-const blockedAt = (mon, slot, sub) => (model().blocked || []).find(b => b.monitor === mon && b.slot === slot && subOf(b) === sub);
-function blockCell(mon, slot, sub = null) {
-  const m = model();
-  m.blocked = m.blocked || [];
-  if (blockedAt(mon, slot, sub)) return;
-  // Charaktere, die genau dort festgepinnt sind, wandern zurück in die Palette
-  const key = sl(slot, sub), gone = m.assign.filter(a => a.monitor === mon && covered(a).includes(key));
-  m.assign = m.assign.filter(a => !gone.includes(a));
-  if (gone.length) flash(t("unpinnedForBlock", {list: gone.map(a => a.char).join(", ")}), "warn");
-  m.overflow = (m.overflow || []).filter(o => !(o.monitor === mon && o.slot === slot && subOf(o) === sub));
-  m.blocked.push({monitor: mon, slot, sub, label: "", match: ""});
-  changed();
-  setTimeout(() => editCell(mon, slot, sub), 250);
-}
-function unblockCell(mon, slot, sub = null) {
-  const m = model();
-  m.blocked = (m.blocked || []).filter(b => !(b.monitor === mon && b.slot === slot && subOf(b) === sub));
-  changed();
-}
-function editCell(mon, slot, sub = null) {
-  const b = blockedAt(mon, slot, sub);
-  const el = document.querySelector(`.cell.blocked[data-mon="${mon}"][data-slot="${slot}"][data-sub="${sub ?? ""}"]`);
-  if (!b || !el) return;
-  const pop = $("cellpop"), r = el.getBoundingClientRect();
-  $("cpLabel").value = b.label || ""; $("cpMatch").value = b.match || "";
-  $("cpPreview").value = b.preview || "";
-  $("cpShow").value = b.preview_show || "always";
-  $("cpMatchWrap").style.display = b.preview ? "none" : "";
-  $("cpShowWrap").style.display = b.preview ? "" : "none";
-  $("cpWins").innerHTML = (state.windows || []).flatMap(([cap, cls]) => [cap, cls]).filter(Boolean)
-    .filter((v, i, a) => a.indexOf(v) === i).map(v => `<option value="${esc(v)}">`).join("");
-  pop.style.display = "grid";
-  pop.style.left = Math.min(innerWidth - pop.offsetWidth - 10, Math.max(10, r.left)) + "px";
-  pop.style.top = Math.min(innerHeight - pop.offsetHeight - 10, r.top + 24) + "px";
-  pop.dataset.mon = mon; pop.dataset.slot = slot; pop.dataset.sub = sub ?? "";
-  $("cpLabel").focus();
-}
-function saveCellPop() {
-  const pop = $("cellpop"), b = blockedAt(...placeOf(pop));
-  if (b) {
-    b.label = $("cpLabel").value.trim();
-    // eine Auswahl aus der Liste ist ein wörtlicher Titel -> Regex-Sonderzeichen entschärfen
-    let m = $("cpMatch").value.trim();
-    if ((state.windows || []).some(([cap, cls]) => m === cap || m === cls)) m = m.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    b.preview = $("cpPreview").value;
-    b.preview_show = $("cpShow").value;
-    b.match = b.preview ? "" : m;   // Vorschau und Fenster im selben Feld schliessen sich aus
-    changed();
-  }
-  pop.style.display = "none";
-}
-// ---- Überlauf-Felder: model().overflow = [{monitor, slot, sub, max}] in Reihenfolge
-const overflowIdx = (mon, slot, sub) => (model().overflow || []).findIndex(o => o.monitor === mon && o.slot === slot && subOf(o) === sub);
-function addOverflow(mon, slot, sub) {
-  const m = model();
-  m.overflow = m.overflow || [];
-  if (overflowIdx(mon, slot, sub) < 0) m.overflow.push({monitor: mon, slot, sub, max: null});
-  changed();
-  setTimeout(() => openOfPop(overflowIdx(mon, slot, sub)), 250);
-}
-function openOfPop(i) {
-  const ofl = model().overflow || [], o = ofl[i];
-  if (!o) return;
-  const el = document.querySelector(`.badge.of[data-i="${i}"]`), pop = $("ofpop");
-  const last = i === ofl.length - 1;
-  $("ofTitle").textContent = `${t("overflowN", {n: i + 1})} · ${o.monitor}:${sl(o.slot, subOf(o))}`;
-  $("ofMax").textContent = o.max ? o.max : "∞";
-  $("ofMaxRow").style.display = last ? "none" : "";
-  $("ofLastHint").style.display = last ? "" : "none";
-  pop.querySelector('[data-of="up"]').disabled = i === 0;
-  pop.querySelector('[data-of="down"]').disabled = last;
-  pop.dataset.i = i;
-  showPop(pop, el);
-}
-document.querySelectorAll("[data-of]").forEach(b => b.onclick = () => {
-  const m = model(), i = +$("ofpop").dataset.i, o = m.overflow[i], a = b.dataset.of;
-  if (!o) return;
-  if (a === "m+") o.max = (o.max || 0) + 1;
-  if (a === "m-") o.max = o.max > 1 ? o.max - 1 : null;
-  let ni = i;
-  if (a === "up" && i > 0) { m.overflow.splice(i, 1); m.overflow.splice(i - 1, 0, o); ni = i - 1; }
-  if (a === "down" && i < m.overflow.length - 1) { m.overflow.splice(i, 1); m.overflow.splice(i + 1, 0, o); ni = i + 1; }
-  if (a === "remove") { m.overflow.splice(i, 1); $("ofpop").style.display = "none"; changed(); return; }
-  changed();
-  setTimeout(() => openOfPop(ni), 300);
-});
-$("ofClose").onclick = () => { $("ofpop").style.display = "none"; };
-
-// ---- Vorschau-Leiste auf einem Stapel: model().stack_previews = {"center:1": {mode, edge, size, show}}
-function openSpPop(mon, slot, sub) {
-  const key = `${mon}:${sl(slot, sub)}`, pop = $("sppop"), cur = (model().stack_previews || {})[key] || {};
-  const el = document.querySelector(`[data-mon="${mon}"][data-slot="${slot}"][data-sub="${sub ?? ""}"]`);
-  $("spvTitle").textContent = t("spvTitle", {cell: key});
-  $("spvMode").value = cur.mode || ""; $("spvEdge").value = cur.edge || "bottom";
-  $("spvSize").textContent = `${cur.size || 18} %`; $("spvShow").value = cur.show || "always";
-  pop.dataset.key = key;
-  showPop(pop, el);
-}
-function saveSpPop(sizeDelta = 0) {
-  const m = model(), key = $("sppop").dataset.key, mode = $("spvMode").value;
-  m.stack_previews = m.stack_previews || {};
-  const size = Math.max(5, Math.min(60, (parseInt($("spvSize").textContent) || 18) + sizeDelta));
-  $("spvSize").textContent = `${size} %`;
-  if (!mode) delete m.stack_previews[key];
-  else m.stack_previews[key] = {mode, edge: $("spvEdge").value, size, show: $("spvShow").value};
-  changed();
-}
-["spvMode", "spvEdge", "spvShow"].forEach(id => $(id).onchange = () => saveSpPop());
-document.querySelectorAll("[data-spv]").forEach(b => b.onclick = () => saveSpPop(b.dataset.spv === "+" ? 2 : -2));
-$("spvClose").onclick = () => { $("sppop").style.display = "none"; };
-
-// ---- Stapel-Kurzbefehle: model().stack_hotkeys = {"center:1": "Meta+1"}
-function openHkPop(mon, slot, sub) {
-  const key = `${mon}:${sl(slot, sub)}`, pop = $("hkpop");
-  const el = document.querySelector(`[data-mon="${mon}"][data-slot="${slot}"][data-sub="${sub ?? ""}"]`);
-  $("hkTitle").textContent = t("stackHotkey", {cell: key});
-  $("hkInput").value = (model().stack_hotkeys || {})[key] || "";
-  $("hkInput").placeholder = t("noKey");
-  pop.dataset.key = key;
-  showPop(pop, el);
-  $("hkInput").focus();
-}
-bindKeyCapture($("hkInput"), (keys) => {
-  const m = model(), key = $("hkpop").dataset.key;
-  m.stack_hotkeys = m.stack_hotkeys || {};
-  if (keys) m.stack_hotkeys[key] = keys; else delete m.stack_hotkeys[key];
-  changed();
-});
-$("hkClose").onclick = () => { $("hkpop").style.display = "none"; };
-function showPop(pop, anchor) {
-  pop.style.display = "grid";
-  const r = anchor ? anchor.getBoundingClientRect() : {left: innerWidth / 2, top: innerHeight / 3};
-  pop.style.left = Math.min(innerWidth - pop.offsetWidth - 10, Math.max(10, r.left)) + "px";
-  pop.style.top = Math.min(innerHeight - pop.offsetHeight - 10, r.top + 24) + "px";
-}
-// Platz-Schlüssel ("mon:slot[.sub]") in Kurzbefehl-Tabelle umschreiben/entfernen
-function remapHotkeys(fn) {   // Platz-Schlüssel in stack_hotkeys und stack_previews umschreiben
-  const m = model();
-  for (const field of ["stack_hotkeys", "stack_previews"]) {
-    const out = {};
-    for (const [k, v] of Object.entries(m[field] || {})) {
-      const [mon, rest] = k.split(":"), [slot, sub] = rest.split(".");
-      const r = fn(mon, +slot, sub === undefined ? null : +sub);
-      if (r) out[`${r[0]}:${sl(r[1], r[2])}`] = v;
-    }
-    m[field] = out;
-  }
-}
-
-// ---- Tastenkombination aufnehmen (Qt-Schreibweise für KDE: "Meta+Ctrl+Alt+Shift+X")
-function keyName(ev) {
-  const c = ev.code, k = ev.key;
-  if (/^Key[A-Z]$/.test(c)) return c.slice(3);
-  if (/^Digit\d$/.test(c)) return c.slice(5);
-  if (/^Numpad\d$/.test(c)) return "Num+" + c.slice(6);
-  if (/^F\d{1,2}$/.test(k)) return k;
-  const map = {ArrowLeft: "Left", ArrowRight: "Right", ArrowUp: "Up", ArrowDown: "Down", PageUp: "PgUp", PageDown: "PgDown",
-               " ": "Space", Tab: "Tab", Home: "Home", End: "End", Insert: "Ins", Enter: "Return", Pause: "Pause",
-               Backquote: "`", Minus: "-", Equal: "=", BracketLeft: "[", BracketRight: "]", Semicolon: ";", Quote: "'",
-               Comma: ",", Period: ".", Slash: "/", Backslash: "\\"};
-  return map[k] || map[c] || null;
-}
-function bindKeyCapture(input, onSet) {
-  input.addEventListener("focus", () => { input.dataset.old = input.value; input.classList.add("rec"); input.value = ""; input.placeholder = t("pressKey"); });
-  input.addEventListener("blur", () => { input.classList.remove("rec"); if (!input.value) input.value = input.dataset.old || ""; input.placeholder = t("noKey"); });
-  input.addEventListener("keydown", (ev) => {
-    ev.preventDefault(); ev.stopPropagation();
-    if (ev.key === "Escape") { input.value = input.dataset.old || ""; input.blur(); return; }
-    if ((ev.key === "Backspace" || ev.key === "Delete") && !ev.ctrlKey && !ev.altKey && !ev.metaKey) {
-      input.dataset.old = ""; input.value = ""; input.blur(); onSet(""); return;
-    }
-    if (["Control", "Alt", "Shift", "Meta", "OS", "AltGraph"].includes(ev.key)) return;
-    const name = keyName(ev);
-    if (!name) return;
-    const mods = [ev.metaKey && "Meta", ev.ctrlKey && "Ctrl", ev.altKey && "Alt", ev.shiftKey && "Shift"].filter(Boolean);
-    const combo = [...mods, name].join("+");
-    input.value = combo; input.dataset.old = combo; input.blur(); onSet(combo);
-  });
-}
-
-// ---- Globale Einstellungen: Kurzbefehle + Titelleisten
-async function saveSettings(patch, msg) {
-  try { await api("/api/settings", patch); flash(msg); await load(); }
-  catch (e) { flash(e.message, "err"); }
-}
-document.querySelectorAll("input.keycap[data-hk]").forEach(inp => bindKeyCapture(inp, () => {
-  const hk = {...(state.settings.hotkeys || {})};
-  document.querySelectorAll("input.keycap[data-hk]").forEach(i => { hk[i.dataset.hk] = i.value; });
-  saveSettings({hotkeys: hk}, t("hkSaved"));
-}));
-bindKeyCapture($("photkey"), (keys) => { model().hotkey = keys; changed(); });
-function colorInput(value, onChange) {
-  const id = "c" + Math.random().toString(36).slice(2);
-  setTimeout(() => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.querySelector("input").onchange = (ev) => onChange(ev.target.value);
-    const clr = el.querySelector("button");
-    if (clr) clr.onclick = () => onChange("");
-  });
-  return `<span class="clr" id="${id}"><input type="color" value="${esc(value || "#3a6f97")}" ${value ? "" : 'style="opacity:.35"'}>` +
-    (value ? `<button title="${esc(t("clearColor"))}">✕</button>` : `<span class="small">${esc(t("tbNone"))}</span>`) + `</span>`;
-}
-function renderSettings() {
-  const st = state.settings || {}, feats = (state.auto && state.auto.features) || [];
-  document.querySelectorAll("input.keycap[data-hk]").forEach(i => {
-    if (document.activeElement !== i) { i.value = (st.hotkeys || {})[i.dataset.hk] || ""; i.placeholder = t("noKey"); }
-    i.disabled = !feats.includes("hotkeys");
-  });
-  $("lockWrap").style.display = feats.includes("lock") ? "" : "none";
-  $("lockWrap").title = t("lockHelp");
-  const tb = st.titlebar || {};
-  $("tbHide").checked = !!tb.hide;
-  $("tbHide").disabled = !st.titlebar_available;
-  $("tbDefault").innerHTML = colorInput(tb.color, (c) => saveSettings({titlebar: {...tb, color: c}}, t("tbSaved")));
-  const sep = st.separator || {};
-  $("sepWidth").textContent = sep.width ? `${sep.width} px` : t("off");
-  $("sepShow").value = sep.show || "always";
-  $("sepShow").disabled = !sep.width;
-  $("sepColor").innerHTML = sep.width ? colorInput(sep.color || "#3c3c3c", (c) => saveSettings({separator: {...sep, color: c || "#3c3c3c"}}, t("sepSaved"))).replace(/<button[^>]*>✕<\/button>/, "") : "";
-  const chars = st.characters || {};
-  $("tbChars").innerHTML = allChars().map(c => `<li><span>${esc(c)}</span>${colorInput((chars[c] || {}).color, (col) => {
-    const next = {...chars}; if (col) next[c] = {color: col}; else delete next[c];
-    saveSettings({characters: next}, t("tbSaved"));
-  })}</li>`).join("");
-}
-document.querySelectorAll("[data-sep]").forEach(b => b.onclick = () => {
-  const sep = {...(state.settings.separator || {})};
-  sep.width = Math.max(0, Math.min(20, (+sep.width || 0) + (b.dataset.sep === "+" ? 1 : -1)));
-  saveSettings({separator: sep}, t("sepSaved"));
-});
-$("sepShow").onchange = (ev) => saveSettings({separator: {...(state.settings.separator || {}), show: ev.target.value}}, t("sepSaved"));
-$("tbHide").onchange = (ev) => saveSettings({titlebar: {...(state.settings.titlebar || {}), hide: ev.target.checked}}, t("tbSaved"));
-$("lockToggle").onchange = async (ev) => {
-  try { setAuto(await api("/api/lock", {enabled: ev.target.checked})); } catch (e) { toast(t("tError"), e.message, "err"); }
-};
-
-// ---- Feld-Typen verschieben: frei gehaltene Felder (inkl. Vorschau), Überlauf, Kurzbefehle, Subgrids
-const DTC = "application/x-fcwm-cell";
-const samePlace = (x, mon, slot, sub) => x.monitor === mon && x.slot === slot && subOf(x) === sub;
-function movePinnedChars(from, to) {   // fest zugewiesene Charaktere genau auf `from` nach `to` umsetzen
-  for (const a of model().assign.filter(a => samePlace(a, ...from))) { a.monitor = to[0]; a.slot = to[1]; a.sub = to[2]; a.span = [1, 1]; }
-}
-function moveCellThing(d, to) {
-  const m = model(), [mon, slot, sub] = to;
-  if (d.kind === "blocked") {
-    const from = [d.mon, d.slot, d.sub], b = blockedAt(...from), other = blockedAt(mon, slot, sub);
-    if (!b || (mon === d.mon && slot === d.slot && sub === d.sub)) return;
-    if (other) { other.monitor = d.mon; other.slot = d.slot; other.sub = d.sub; }
-    const tmp = [d.mon, d.slot, d.sub];
-    // Charaktere am Ziel tauschen mit dem bisherigen Platz (dort war ja frei gehalten)
-    const there = m.assign.filter(a => samePlace(a, mon, slot, sub));
-    there.forEach(a => { a.monitor = tmp[0]; a.slot = tmp[1]; a.sub = tmp[2]; a.span = [1, 1]; });
-    const oi = overflowIdx(mon, slot, sub);
-    if (oi >= 0) { const o = m.overflow[oi]; o.monitor = tmp[0]; o.slot = tmp[1]; o.sub = tmp[2]; }
-    b.monitor = mon; b.slot = slot; b.sub = sub;
-  } else if (d.kind === "overflow") {
-    const o = (m.overflow || [])[d.i];
-    if (!o) return;
-    if (blockedAt(mon, slot, sub)) return flash(t("dropOnBlocked"), "warn");
-    const oi = overflowIdx(mon, slot, sub);
-    if (oi >= 0 && oi !== d.i) { const x = m.overflow[oi]; x.monitor = o.monitor; x.slot = o.slot; x.sub = subOf(o); }
-    o.monitor = mon; o.slot = slot; o.sub = sub;
-  } else if (d.kind === "hotkey") {
-    const hk = m.stack_hotkeys || {}, key = `${mon}:${sl(slot, sub)}`;
-    if (!hk[d.key] || key === d.key) return;
-    const mine = hk[d.key], theirs = hk[key];
-    delete hk[d.key];
-    if (theirs) hk[d.key] = theirs;
-    hk[key] = mine;
-  } else if (d.kind === "stackpreview") {
-    const sp = m.stack_previews || {}, key = `${mon}:${sl(slot, sub)}`;
-    if (!sp[d.key] || key === d.key) return;
-    const mine = sp[d.key], theirs = sp[key];
-    delete sp[d.key];
-    if (theirs) sp[d.key] = theirs;
-    sp[key] = mine;
-  } else if (d.kind === "subgrid") {
-    if (sub !== null) return flash(t("subgridTarget"), "warn");
-    const sg = subgridOf(d.mon, d.slot);
-    if (!sg || (mon === d.mon && slot === d.slot)) return;
-    if (subgridOf(mon, slot) || blockedAt(mon, slot, null)) return flash(t("subgridTarget"), "warn");
-    // Hauptzellen-Inhalt am Ziel wandert auf den alten Platz, Subzellen-Inhalt zieht mit um
-    movePinnedChars([mon, slot, null], [d.mon, d.slot, null]);
-    const inSub = (x) => x.monitor === d.mon && x.slot === d.slot && subOf(x) !== null;
-    [...m.assign, ...(m.blocked || []), ...(m.overflow || [])].filter(inSub).forEach(x => { x.monitor = mon; x.slot = slot; });
-    remapHotkeys((mo, s_, su) => mo === d.mon && s_ === d.slot && su !== null ? [mon, slot, su] : [mo, s_, su]);
-    if (sg.weights === undefined) sg.weights = null;
-    sg.monitor = mon; sg.slot = slot;
-  } else return;
-  changed();
-}
-
-function toggleUse(alias, on) {
-  // Zuweisungen bleiben erhalten (nicht destruktiv) – der Server füllt sie solange anderswo auf
-  const m = model(), set = new Set(m.disabled || []);
-  on ? set.delete(alias) : set.add(alias);
-  m.disabled = Object.keys(state.monitor_config).filter(a => set.has(a));
-  changed();
-}
-function toggleFill(alias, on) {
-  const m = model(), order = Object.keys(state.monitor_config), set = new Set(m.fill);
-  on ? set.add(alias) : set.delete(alias);
-  m.fill = order.filter(a => set.has(a));
-  changed();
-}
-
-// ============================================================ Profile
-function newProfile(base) {
-  const key = `*new*${++newCounter}`;
-  const m = base ? clone(base.model) : {description: "", fill: [], focus: null, assign: [], disabled: [],
-    grids: Object.fromEntries(Object.entries(state.monitor_config).map(([a, mc]) => [a, mc.grid])),
-    weights: Object.fromEntries(Object.entries(state.monitor_config).filter(([, mc]) => mc.weights).map(([a, mc]) => [a, mc.weights]))};
-  const stem = base ? `${base.name} ${t("copy")}` : t("newProfile");
-  const taken = (n) => state.models[n] || Object.values(drafts).some(d => d.name === n);
-  let name = stem;
-  for (let i = 2; taken(name); i++) name = `${stem} ${i}`;
-  drafts[key] = {name, oldName: null, model: m, dirty: true};
-  cur = key;
-}
-async function save() {
-  const d = draft();
-  try {
-    await api("/api/profile", {name: d.name, old_name: d.oldName, model: d.model});
-    delete drafts[cur]; cur = d.name;
-    flash(t("profileSaved", {name: d.name}));
-    await load();
-  } catch (e) { flash(e.message, "err"); }
-}
-
-// ============================================================ Auto-Platzierung + Ereignisse
-function setAuto(a) {
-  auto = a;
-  $("autoToggle").checked = $("autoToggle2").checked = a.enabled;
-  $("lockToggle").checked = !!a.lock;
-  $("autoState").textContent = t("autoShort");
-  $("autoBanner").className = "banner" + (a.enabled ? "" : " off");
-  $("autoBannerText").textContent = a.enabled ? t("bannerOn", {profile: a.effective_profile || "–"}) : t("bannerOff");
-  $("autoHelpQ").title = t("autoHelp");
-  $("listenerKind").textContent = a.listener + (a.running ? "" : " (stopped)");
-  const names = Object.keys(state?.models || {});
-  $("autoProfile").innerHTML = `<option value="">${esc(t("defaultProfile"))} (${esc(state?.default_profile || "–")})</option>` +
-    names.map(n => `<option ${n === a.profile ? "selected" : ""}>${esc(n)}</option>`).join("");
-}
-async function updateAuto(patch) {
-  try { setAuto(await api("/api/auto", patch)); } catch (e) { toast(t("tError"), e.message, "err"); }
-}
-$("autoToggle").onchange = (ev) => updateAuto({enabled: ev.target.checked});
-$("autoToggle2").onchange = (ev) => updateAuto({enabled: ev.target.checked});
-$("autoProfile").onchange = (ev) => updateAuto({profile: ev.target.value || null});
-
-function eventText(e) {
-  switch (e.type) {
-    case "login": return t(e.auto ? "evLoginAuto" : "evLogin", {char: e.char});
-    case "closed": return t("evClosed", {char: e.char});
-    case "placed": return [e.items.map(i => t("evPlaced", i)).join(", "),
-                           e.unplaced.length ? t("evUnplaced", {list: e.unplaced.join(", ")}) : ""].filter(Boolean).join(" · ");
-    case "profile": return t("evProfile", {name: e.name, n: e.placed});
-    case "error": return e.message;
-    case "auto": return e.enabled ? t("evAutoOn", {profile: e.effective_profile}) : t("evAutoOff");
-  }
-  return JSON.stringify(e);
-}
-function logEvent(e, live = true) {
-  if (e.type === "placed" && !e.items.length && !e.unplaced.length) return;
-  const li = document.createElement("li");
-  const time = new Date(e.ts * 1000).toLocaleTimeString(lang, {hour: "2-digit", minute: "2-digit", second: "2-digit"});
-  li.innerHTML = `<time>${time}</time><span class="${e.type}">${esc(eventText(e))}</span>`;
-  $("log").prepend(li);
-  while ($("log").children.length > 100) $("log").lastChild.remove();
-  if (!live) return;
-  if (e.type === "login") toast(t("tNew"), eventText(e));
-  if (e.type === "placed") toast(t("tPlaced"), eventText(e), e.unplaced.length ? "warn" : "ok");
-  if (e.type === "error") toast(t("tError"), e.message, "err");
-  if (e.type === "profile") toast(t("tProfile"), eventText(e), "ok");
-}
-function connectEvents() {
-  const es = new EventSource("/api/events");
-  es.onopen = () => $("live").classList.add("on");
-  es.onerror = () => $("live").classList.remove("on");
-  es.onmessage = (m) => {
-    const e = JSON.parse(m.data);
-    if (e.type === "auto") { setAuto(e); logEvent(e); return; }
-    logEvent(e);
-    if (["login", "closed", "placed", "profile"].includes(e.type)) scheduleRefresh();
-  };
-}
-$("clearlog").onclick = () => { $("log").innerHTML = ""; };
-
-// ============================================================ Rendering
-function renderHeader() {
-  const keys = [...Object.keys(state.models), ...Object.keys(drafts).filter(k => !state.models[k])];
-  $("tabs").innerHTML = keys.map(k => {
-    const d = drafts[k], name = d ? d.name : k;
-    return `<button class="tab ${k === cur ? "active" : ""}" data-k="${esc(k)}">${esc(name)}` +
-      (k === state.default_profile ? `<span class="def" title="${esc(t("defaultProfile"))}">★</span>` : "") +
-      (auto && k === auto.effective_profile ? `<span class="act" title="${esc(t("activeProfile"))}">▸</span>` : "") +
-      (d && d.dirty ? `<span class="dirty" title="${esc(t("unsaved"))}">◆</span>` : "") + `</button>`;
-  }).join("") + `<button class="tab" id="newtab" title="${esc(t("newProfile"))}">＋</button>`;
-  document.querySelectorAll(".tab[data-k]").forEach(b => b.onclick = () => { cur = b.dataset.k; renderHeader(); preview(); });
-  $("newtab").onclick = () => { newProfile(); renderHeader(); preview(); };
-
-  const d = draft();
-  if (document.activeElement !== $("pname")) $("pname").value = d.name;
-  if (document.activeElement !== $("pdesc")) $("pdesc").value = d.model.description || "";
-  if (document.activeElement !== $("photkey")) { $("photkey").value = d.model.hotkey || ""; $("photkey").placeholder = t("noKey"); }
-  $("save").disabled = !d.dirty;
-  $("discard").disabled = !d.dirty;
-  $("mkdefault").disabled = !d.oldName || d.oldName === state.default_profile;
-}
-
-function renderSidebar() {
-  const n = Object.keys(state.clients).length;
-  $("meta").textContent = t("status", {backend: state.backend, clients: n, monitors: state.monitors.length});
-  $("cfgpath").textContent = $("cfgpathTop").textContent = state.config_path;
-  $("clientCount").textContent = n;
-  const clients = Object.entries(state.clients).sort((a, b) => a[0].localeCompare(b[0]));
-  $("clients").innerHTML = clients.length ? clients.map(([c, w]) =>
-    `<li><span>${esc(c)}</span><span class="small">${esc(w.output || "")}</span></li>`).join("")
-    : `<li class="small">${esc(t("noClients"))}</li>`;
-  $("monitors").innerHTML = state.monitors.map(m =>
-    `<li><span>${esc(m.name)}</span><span class="small">${m.geometry[2]}×${m.geometry[3]} @ ${m.geometry[0]},${m.geometry[1]}</span></li>`).join("");
-}
-
-function allChars() {
-  const set = new Set([...Object.keys(state.clients), ...extraChars]);
-  for (const m of Object.values(state.models)) m.assign.forEach(a => set.add(a.char));
-  model().assign.forEach(a => set.add(a.char));
-  return [...set].sort((a, b) => a.localeCompare(b));
-}
-
-function renderEditor() {
-  const m = model(), chars = allChars();
-  $("pfocus").innerHTML = `<option value="">${esc(t("none"))}</option>` +
-    chars.map(c => `<option ${c === m.focus ? "selected" : ""}>${esc(c)}</option>`).join("");
-
-  const placedBy = Object.fromEntries(plan.placements.map(p => [p.char, p]));
-  const pinned = Object.fromEntries(m.assign.map(a => [a.char, a]));
-  $("palette").innerHTML = chars.map(c => {
-    const open = !!state.clients[c], a = pinned[c], p = placedBy[c];
-    const cls = a ? "pinned" : p ? "auto" : open ? "unplaced" : "";
-    const where = a ? `${a.monitor}:${sl(a.slot, subOf(a))}` : p ? `${t("auto")} ${p.monitor}:${sl(p.slot, subOf(p))}` : open ? t("noSpace") : "";
-    return `<span class="chip ${cls} ${open ? "open" : ""}" draggable="true" data-char="${esc(c)}" title="${esc(open ? t("loggedIn") : t("notLoggedIn"))}">` +
-      `<span class="dot"></span>${esc(c)}${where ? `<span class="where">${esc(where)}</span>` : ""}</span>`;
-  }).join("") || `<span class="small">${esc(t("noChars"))}</span>`;
-
-  drawCanvas();
-  drawMonitorCards();
-
-  const msgs = [];
-  if (plan.unplaced.length) msgs.push(`<div class="msg warn">${esc(t("unplaced", {list: plan.unplaced.join(", ")}))}</div>`);
-  plan.warnings.forEach(w => msgs.push(`<div class="msg warn">${esc(w)}</div>`));
-  $("planmsgs").innerHTML = msgs.join("");
-  bindDnD();
-}
-
-function drawCanvas() {
-  const cv = $("canvas"), mons = state.monitors;
-  const minX = Math.min(...mons.map(m => m.geometry[0])), minY = Math.min(...mons.map(m => m.geometry[1]));
-  const maxX = Math.max(...mons.map(m => m.geometry[0] + m.geometry[2])), maxY = Math.max(...mons.map(m => m.geometry[1] + m.geometry[3]));
-  const s = cv.clientWidth / (maxX - minX);
-  cv.style.height = Math.round((maxY - minY) * s) + "px";
-  const box = (r, cls, inner = "", attrs = "") =>
-    `<div class="${cls}" ${attrs} style="left:${(r[0]-minX)*s}px;top:${(r[1]-minY)*s}px;width:${r[2]*s}px;height:${r[3]*s}px">${inner}</div>`;
-  const small = (r) => r[2] * s < 90 || r[3] * s < 60;   // sehr kleine Zellen kompakter beschriften
-
-  const aliasOf = Object.fromEntries(Object.entries(state.monitor_config).filter(([, mc]) => mc.output).map(([a, mc]) => [mc.output, a]));
-  Object.entries(plan.layouts).forEach(([a, l]) => { aliasOf[l.output] = a; });
-  const off = new Set(plan.disabled);
-  let html = mons.map(m => {
-    const alias = aliasOf[m.name], unused = alias && off.has(alias);
-    return box(m.geometry, `mon ${unused ? "unused" : ""}`,
-      `<span class="label">${esc(m.name)} · ${esc(alias ? alias + (unused ? " · " + t("unused") : "") : t("notConfigured"))}</span>`);
-  }).join("");
-
-  // belegte Plätze ("mon:3" bzw. "mon:1.2")
-  const taken = new Set();
-  const mark = (x, span = [1, 1]) => {
-    const sub = subOf(x);
-    if (sub !== null) return taken.add(`${x.monitor}:${sl(x.slot, sub)}`);
-    const [cols] = plan.layouts[x.monitor].grid;
-    for (let r = 0; r < span[1]; r++) for (let c = 0; c < span[0]; c++) taken.add(`${x.monitor}:${x.slot + r * cols + c}`);
-  };
-  plan.placements.forEach(p => mark(p, p.span));
-  plan.reserved.forEach(p => mark(p, p.span));
-  plan.blocked.forEach(b => mark(b));
-
-  const ofKeys = new Set((plan.overflow || []).map(o => `${o.monitor}:${sl(o.slot, subOf(o))}`));
-  const emptyTools = (mon, slot, sub) => (ofKeys.has(`${mon}:${sl(slot, sub)}`) ? "" : `<button data-act="overflow" title="${esc(t("makeOverflow"))}">⇊</button>`) +
-    `<button data-act="hk" title="${esc(t("setHotkey"))}">⌨</button><button data-act="spv" title="${esc(t("setStackPreview"))}">▣</button>`;
-  for (const [alias, lay] of Object.entries(plan.layouts)) {
-    html += box(lay.area, "area");
-    lay.cells.forEach((c, i) => {
-      const sg = (lay.subgrids || {})[i];
-      if (sg) {   // Rahmen der geteilten Zelle + leere Subzellen
-        html += box(c, "subframe", `<button class="sgtag" data-act="subedit" draggable="true" data-dnd="${esc(JSON.stringify({kind: "subgrid", mon: alias, slot: i}))}" title="${esc(t("editSubgrid") + " · " + t("dragCellType"))}">⊞ ${sg.grid[0]}×${sg.grid[1]}</button>`,
-                    `data-mon="${esc(alias)}" data-slot="${i}"`);
-        sg.cells.forEach((sc, j) => {
-          if (!taken.has(`${alias}:${i}.${j}`))
-            html += box(sc, `cell drop subcell ${small(sc) ? "tiny" : ""} ${ofKeys.has(`${alias}:${i}.${j}`) ? "ofl" : ""}`, `<span class="tools">${emptyTools(alias, i, j)}<button data-act="block" title="${esc(t("blockCell"))}">⊘</button></span>` +
-                        `<span class="idx">${esc(alias)}:${i}.${j}</span><span class="sub">${sc[2]}×${sc[3]}</span>`, placeAttrs(alias, i, j));
-        });
-      } else if (!taken.has(`${alias}:${i}`)) {
-        html += box(c, `cell drop ${ofKeys.has(`${alias}:${i}`) ? "ofl" : ""}`, `<span class="tools">${emptyTools(alias, i, null)}<button data-act="split" title="${esc(t("splitCell"))}">⊞</button><button data-act="block" title="${esc(t("blockCell"))}">⊘</button></span>` +
-                    `<span class="idx">${esc(alias)}:${i}</span><span class="sub">${c[2]}×${c[3]}</span>`, placeAttrs(alias, i, null));
-      }
-    });
-  }
-  for (const b of plan.blocked) {
-    const sub = b.preview ? t(b.preview === "hidden" ? "pvHidden" : "pvAll")
-              : b.window ? `→ ${b.window}` : b.match ? `≈ ${b.match} · ${t("notOpen")}` : t("keptFreeSub");
-    const bdnd = esc(JSON.stringify({kind: "blocked", mon: b.monitor, slot: b.slot, sub: subOf(b)}));
-    html += box(b.rect, `cell blocked ${b.preview ? "preview" : ""} ${small(b.rect) ? "tiny" : ""}`,
-      `<span class="tools"><button data-act="edit" title="${esc(t("editCell"))}">✎</button><button data-act="unblock" title="${esc(t("unblockCell"))}">✕</button></span>` +
-      `<span class="bl">${b.preview ? "▣ " : ""}${esc(b.label || (b.preview ? t("preview") : t("keptFree")))}</span><span class="sub">${esc(sub)}</span><span class="idx">${esc(b.monitor)}:${sl(b.slot, subOf(b))}</span>`,
-      placeAttrs(b.monitor, b.slot, subOf(b)) + ` draggable="true" data-dnd="${bdnd}" title="${esc(t("dragCellType"))}"`);
-  }
-
-  const tools = (auto, inSub) => `<span class="tools">` + (auto
-    ? `<button data-act="pin" title="${esc(t("pinHere"))}">${PIN}</button>`
-    : `<button data-act="hk" title="${esc(t("setHotkey"))}">⌨</button><button data-act="spv" title="${esc(t("setStackPreview"))}">▣</button>` +
-      (inSub ? "" : `<button data-act="w" title="${esc(t("wider"))}">⇥</button><button data-act="h" title="${esc(t("taller"))}">⤓</button>`) +
-      `<button data-act="x" title="${esc(t("remove"))}">✕</button>`) + `</span>`;
-
-  // Platzierungen + offline reservierte Plätze nach Stapel (Monitor:Slot[.Sub]) gruppieren
-  const order = Object.fromEntries(model().assign.map((a, i) => [a.char, i]));
-  const items = [
-    ...plan.placements.map(p => ({...p, kind: p.auto ? "auto" : "pinned"})),
-    ...plan.reserved.map(p => ({...p, kind: "offline", auto: false})),
-  ];
-  const stacks = {};
-  for (const it of items) (stacks[`${it.monitor}:${sl(it.slot, subOf(it))}`] ??= []).push(it);
-  const rank = (it) => it.auto ? 1e6 : (order[it.char] ?? 1e5);
-
-  for (const members of Object.values(stacks)) {
-    members.sort((a, b) => rank(a) - rank(b));
-    const top = members[0], sub = subOf(top), inSub = sub !== null, tiny = small(top.rect) ? "tiny" : "";
-    const where = placeAttrs(top.monitor, top.slot, sub), idx = `${esc(top.monitor)}:${sl(top.slot, sub)}`;
-    if (members.length === 1) {
-      const info = top.kind === "offline" ? t("notLoggedIn") : `${top.rect[2]}×${top.rect[3]}${top.auto ? " · " + t("auto") : ""}`;
-      html += box(top.rect, `cell p drop ${top.kind} ${inSub ? "subcell" : ""} ${tiny}`,
-        `${tools(top.auto, inSub)}<span class="nm">${esc(top.char)}</span><span class="sub">${esc(info)}</span><span class="idx">${idx}</span>`,
-        `draggable="true" data-char="${esc(top.char)}" ${where}`);
-      continue;
-    }
-    const rows = members.map((it, i) => {
-      const btns = it.auto
-        ? `<button data-act="pin" title="${esc(t("pinHere"))}">${PIN}</button>`
-        : (i > 0 ? `<button data-act="up" title="${esc(t("toTop"))}">▲</button>` : "") +
-          `<button data-act="x" title="${esc(t("remove"))}">✕</button>`;
-      return `<div class="srow ${it.kind} ${i === 0 ? "top" : ""}" draggable="true" data-char="${esc(it.char)}">` +
-        `<span class="nm">${esc(it.char)}</span><span class="sbtn">${btns}</span></div>`;
-    }).join("");
-    const stackTools = `<span class="tools"><button data-act="hk" title="${esc(t("setHotkey"))}">⌨</button><button data-act="spv" title="${esc(t("setStackPreview"))}">▣</button>` +
-      (top.auto || inSub ? "" : `<button data-act="w" title="${esc(t("wider"))}">⇥</button><button data-act="h" title="${esc(t("taller"))}">⤓</button>`) + `</span>`;
-    html += box(top.rect, `cell p drop stack ${top.kind} ${inSub ? "subcell" : ""} ${tiny}`,
-      `${stackTools}<div class="shead">${esc(t("stack", {n: members.length}))}</div><div class="slist">${rows}</div>` +
-      `<span class="idx">${idx} · ${top.rect[2]}×${top.rect[3]}</span>`,
-      `data-char="${esc(top.char)}" ${where}`);
-  }
-
-  // Schilder: Überlauf-Reihenfolge/Max und Stapel-Kurzbefehle
-  const at = (r, dx, dy, cls, text, attrs) =>
-    `<span class="badge ${cls}" ${attrs} style="left:${(r[0] - minX) * s + dx}px;top:${(r[1] - minY) * s + dy}px">${esc(text)}</span>`;
-  (plan.overflow || []).forEach((o, i) => {
-    html += at(o.rect, 4, 3, "of", `⇊ ${o.order} · ${o.max ? "max " + o.max : "∞"}${o.count ? " · " + o.count : ""}`,
-               `data-i="${i}" draggable="true" data-dnd="${esc(JSON.stringify({kind: "overflow", i}))}" title="${esc(t("dragCellType"))}"`);
-  });
-  for (const [k, keys] of Object.entries(model().stack_hotkeys || {})) {
-    const [mon, rest] = k.split(":"), [slot, sub] = rest.split(".");
-    const lay = plan.layouts[mon];
-    if (!lay) continue;
-    const rect = sub === undefined ? lay.cells[+slot] : ((lay.subgrids || {})[slot] || {cells: []}).cells[+sub];
-    if (rect) html += at(rect, 4, Math.max(22, rect[3] * s - 40), "hk", `⌨ ${keys}`, placeAttrs(mon, +slot, sub === undefined ? null : +sub) +
-                         ` draggable="true" data-dnd="${esc(JSON.stringify({kind: "hotkey", key: k}))}" title="${esc(t("dragCellType"))}"`);
-  }
-
-  for (const sp of plan.stack_previews || []) {
-    html += box(sp.rect, "spstrip", "");
-    const label = `▣ ${t(sp.mode === "all" ? "spvAllShort" : "spvStackShort")}`;
-    html += at(sp.stack, Math.max(4, sp.stack[2] * s - 110), 3, "sp", label, placeAttrs(sp.monitor, sp.slot, sp.sub) +
-               ` draggable="true" data-dnd="${esc(JSON.stringify({kind: "stackpreview", key: sp.key}))}" title="${esc(t("dragCellType"))}"`);
-  }
-
-  // Verschiebbare Rasterlinien (Monitor-Raster und Subgrids)
-  canvasMap = {minX, minY, s};
-  const lines = (alias, slot, area, grid, c) => {
-    const [cols, rows] = grid, attrs = `data-mon="${esc(alias)}" data-gslot="${slot ?? ""}"`, cls = slot === null ? "" : "sg";
-    for (let r = 0; r < rows; r++) {
-      for (let k = 0; k < cols - 1; k++) {
-        const a = c[r * cols + k], b = c[r * cols + k + 1], x = (a[0] + a[2] + b[0]) / 2;
-        const top = r === 0 ? area[1] : a[1], bottom = r === rows - 1 ? area[1] + area[3] : a[1] + a[3];
-        html += `<div class="gl v ${cls}" ${attrs} data-axis="0" data-k="${k}" data-row="${r}" title="${esc(t(rows > 1 ? "dragLineRow" : "dragLine"))}"
-          style="left:${(x - minX) * s}px;top:${(top - minY) * s}px;height:${(bottom - top) * s}px"></div>`;
-      }
-    }
-    for (let k = 0; k < rows - 1; k++) {
-      const i = k * cols, y = (c[i][1] + c[i][3] + c[i + cols][1]) / 2;
-      html += `<div class="gl h ${cls}" ${attrs} data-axis="1" data-k="${k}" title="${esc(t("dragLine"))}"
-        style="top:${(y - minY) * s}px;left:${(area[0] - minX) * s}px;width:${area[2] * s}px"></div>`;
-    }
-  };
-  for (const [alias, lay] of Object.entries(plan.layouts)) {
-    lines(alias, null, lay.area, lay.grid, lay.cells);
-    for (const [slot, sg] of Object.entries(lay.subgrids || {})) lines(alias, +slot, lay.cells[+slot], sg.grid, sg.cells);
-  }
-  cv.innerHTML = html;
-  cv.querySelectorAll(".gl").forEach(el => el.onpointerdown = startLineDrag);
-  cv.querySelectorAll(".badge.of").forEach(el => el.onclick = () => openOfPop(+el.dataset.i));
-  cv.querySelectorAll(".badge.hk").forEach(el => el.onclick = () => openHkPop(...placeOf(el)));
-  cv.querySelectorAll(".badge.sp").forEach(el => el.onclick = () => openSpPop(...placeOf(el)));
-}
-
-// ---- Rasterlinien ziehen (Pointer-Events, live Vorschau)
-let canvasMap = null, lineDrag = null, lastLinePreview = 0;
-function startLineDrag(ev) {
-  ev.preventDefault();
-  const d = ev.currentTarget.dataset, lay = plan.layouts[d.mon], slot = d.gslot === "" ? null : +d.gslot;
-  lineDrag = {alias: d.mon, slot, axis: +d.axis, k: +d.k, row: d.row === undefined ? null : +d.row,
-              area: slot === null ? lay.area : lay.cells[slot]};
-  document.body.classList.add(+d.axis ? "drag-h" : "drag-v");
-  $("gltip").style.display = "block";
-  moveLineDrag(ev);
-}
-function moveLineDrag(ev) {
-  if (!lineDrag) return;
-  const {alias, slot, axis, k, area} = lineDrag, rect = $("canvas").getBoundingClientRect(), {minX, minY, s} = canvasMap;
-  // senkrechte Linie: nur diese Zeile; mit Strg die ganze Linie über alle Zeilen
-  const row = axis === 0 && !ev.ctrlKey ? lineDrag.row : null;
-  const pos = axis === 0 ? (ev.clientX - rect.left) / s + minX : (ev.clientY - rect.top) / s + minY;
-  let p = (pos - area[axis]) / area[axis + 2];
-  const w = weightsOf(alias, axis, slot, row), total = w.reduce((x, y) => x + y, 0);
-  const f = w.map(x => x / total), lo = f.slice(0, k).reduce((x, y) => x + y, 0), hi = lo + f[k] + f[k + 1];
-  const MIN = 0.05;
-  p = Math.min(hi - MIN, Math.max(lo + MIN, p));
-  p = ev.shiftKey ? Math.round(p * 12) / 12 : Math.round(p * 200) / 200;   // Shift: auf 1/12 einrasten
-  p = Math.min(hi - MIN, Math.max(lo + MIN, p));
-  f[k] = p - lo; f[k + 1] = hi - p;
-  const nw = f.map(x => Math.round(x * 1000) / 10);
-  if (axis === 0 && row === null) {   // Strg: ganze Linie -> Zeilen-Ausnahmen aufheben
-    const e = weightEntry(alias, slot);
-    if (e && e[2]) e[2] = null;
-  }
-  setWeights(alias, axis, nw, slot, row);
-  const px = Math.round(area[axis + 2] * f[k]), px2 = Math.round(area[axis + 2] * f[k + 1]);
-  const tip = $("gltip");
-  const scope = axis === 0 ? (row === null ? t("allRows") : t("rowN", {n: row + 1})) + "  " : "";
-  tip.textContent = `${scope}${(f[k] * 100).toFixed(1)}% | ${(f[k + 1] * 100).toFixed(1)}%   ${px} | ${px2} px`;
-  tip.style.left = ev.clientX + 14 + "px"; tip.style.top = ev.clientY + 14 + "px";
-  draft().dirty = true;
-  const now = Date.now();
-  if (now - lastLinePreview > 60) { lastLinePreview = now; preview(); }
-}
-function endLineDrag() {
-  if (!lineDrag) return;
-  lineDrag = null;
-  document.body.classList.remove("drag-h", "drag-v");
-  $("gltip").style.display = "none";
-  changed();
-}
-window.addEventListener("pointermove", moveLineDrag);
-window.addEventListener("pointerup", endLineDrag);
-
-function drawMonitorCards() {
-  const m = model(), connected = new Set(Object.keys(plan.layouts));
-  $("moncards").innerHTML = Object.entries(state.monitor_config).map(([alias, mc]) => {
-    const [c, r] = gridOf(alias), def = mc.grid, isDef = c === def[0] && r === def[1];
-    const moved = !!(m.weights || {})[alias];
-    const used = !(m.disabled || []).includes(alias), there = connected.has(alias) || !used;
-    return `<div class="mcard ${there && used ? "" : "off"}" data-mon="${esc(alias)}">
-      <div class="t"><b>${esc(alias)}</b><span class="small">${esc(mc.output ?? "index " + mc.index)}${there ? "" : " · " + esc(t("notConnected"))}</span></div>
-      <label class="switch"><input type="checkbox" data-use ${used ? "checked" : ""}><span class="track"></span><span class="lbl">${esc(t("useMonitor"))}</span></label>
-      <div class="row">
-        <span class="k">${esc(t("cols"))}</span><span class="stepper"><button data-g="c-">−</button><span>${c}</span><button data-g="c+">+</button></span>
-        <span class="k">${esc(t("rows"))}</span><span class="stepper"><button data-g="r-">−</button><span>${r}</span><button data-g="r+">+</button></span>
-      </div>
-      <div class="row">
-        <label class="small"><input type="checkbox" data-fill ${m.fill.includes(alias) ? "checked" : ""} ${used ? "" : "disabled"}> ${esc(t("fillFree"))}</label>
-        <span class="small" style="margin-left:auto">${moved ? `<a href="#" data-g="even">${esc(t("evenLines"))}</a> · ` : ""}${isDef ? esc(t("defaultGrid")) : `<a href="#" data-g="reset">${esc(t("resetTo", {g: `${def[0]}×${def[1]}`}))}</a>`}</span>
-      </div>
-    </div>`;
-  }).join("");
-  document.querySelectorAll(".mcard").forEach(card => {
-    const alias = card.dataset.mon;
-    card.querySelectorAll("[data-g]").forEach(b => b.onclick = (ev) => {
-      ev.preventDefault();
-      const [c, r] = gridOf(alias), g = b.dataset.g;
-      if (g === "reset") {
-        const dw = state.monitor_config[alias].weights;
-        setGrid(alias, ...state.monitor_config[alias].grid);
-        model().weights = model().weights || {};
-        if (dw) model().weights[alias] = clone(dw); else delete model().weights[alias];
-        return changed();
-      }
-      if (g === "even") { setWeights(alias, 0, null); setWeights(alias, 1, null); return changed(); }
-      setGrid(alias, c + (g === "c+") - (g === "c-"), r + (g === "r+") - (g === "r-"));
-    });
-    card.querySelector("[data-fill]").onchange = (ev) => toggleFill(alias, ev.target.checked);
-    card.querySelector("[data-use]").onchange = (ev) => toggleUse(alias, ev.target.checked);
-  });
-}
-
-function acceptDrop(el, onDrop, onCell = null) {
-  const ok = (ev) => ev.dataTransfer.types.includes(DT) || (onCell && ev.dataTransfer.types.includes(DTC));
-  el.addEventListener("dragover", ev => { if (ok(ev)) { ev.preventDefault(); ev.stopPropagation(); el.classList.add("over"); } });
-  el.addEventListener("dragleave", () => el.classList.remove("over"));
-  el.addEventListener("drop", ev => {
-    ev.preventDefault(); ev.stopPropagation(); el.classList.remove("over");
-    const cell = ev.dataTransfer.getData(DTC);
-    if (cell && onCell) return onCell(JSON.parse(cell));
-    onDrop(ev.dataTransfer.getData(DT), ev.shiftKey);
-  });
-}
-function bindDnD() {
-  document.querySelectorAll("[draggable=true]").forEach(el =>
-    el.addEventListener("dragstart", ev => {
-      ev.stopPropagation();
-      if (el.dataset.dnd) ev.dataTransfer.setData(DTC, el.dataset.dnd);
-      else ev.dataTransfer.setData(DT, el.dataset.char);
-      ev.dataTransfer.effectAllowed = "move";
-    }));
-  const onCell = (el) => (d) => moveCellThing(d, placeOf(el));
-  document.querySelectorAll(".cell.blocked").forEach(el => {
-    el.ondblclick = () => editCell(...placeOf(el));
-    acceptDrop(el, () => flash(t("dropOnBlocked"), "warn"), onCell(el));
-  });
-  document.querySelectorAll(".cell.drop").forEach(el => acceptDrop(el, (char, shift) => {
-    if (char) assignTo(char, ...placeOf(el), shift);
-  }, onCell(el)));
-  document.querySelectorAll(".cell .tools button, .srow button, .subframe .sgtag").forEach(b => b.onclick = (ev) => {
-    ev.stopPropagation();
-    const cell = b.closest(".cell, .subframe"), char = (b.closest(".srow") || cell).dataset.char;
-    const [mon, slot, sub] = placeOf(cell);
-    ({pin: () => assignTo(char, mon, slot, sub, false, false), w: () => growSpan(char, 0),
-      h: () => growSpan(char, 1), x: () => unassign(char), up: () => raiseInStack(char),
-      block: () => blockCell(mon, slot, sub), unblock: () => unblockCell(mon, slot, sub),
-      edit: () => editCell(mon, slot, sub), split: () => splitCell(mon, slot),
-      overflow: () => addOverflow(mon, slot, sub), hk: () => openHkPop(mon, slot, sub), spv: () => openSpPop(mon, slot, sub),
-      subedit: () => openSubPop(mon, slot)})[b.dataset.act]();
-  });
-}
-acceptDrop($("palette"), unassign);   // Palette = Ablage zum Entfernen
-
-// ============================================================ Bedienelemente
-$("cpSave").onclick = saveCellPop;
-$("cpPreview").onchange = () => {
-  $("cpMatchWrap").style.display = $("cpPreview").value ? "none" : "";
-  $("cpShowWrap").style.display = $("cpPreview").value ? "" : "none";
-};
-document.querySelectorAll("[data-sp]").forEach(b => b.onclick = () => {
-  const [mon, slot] = [$("subpop").dataset.mon, +$("subpop").dataset.slot], sg = subgridOf(mon, slot), g = b.dataset.sp;
-  if (!sg) return;
-  setSubgrid(mon, slot, sg.grid[0] + (g === "c+") - (g === "c-"), sg.grid[1] + (g === "r+") - (g === "r-"));
-  setTimeout(() => openSubPop(mon, slot), 300);
-});
-$("spEven").onclick = () => {
-  const mon = $("subpop").dataset.mon, slot = +$("subpop").dataset.slot;
-  setWeights(mon, 0, null, slot); setWeights(mon, 1, null, slot); changed();
-  setTimeout(() => openSubPop(mon, slot), 300);
-};
-$("spMerge").onclick = () => mergeCell($("subpop").dataset.mon, +$("subpop").dataset.slot);
-$("spClose").onclick = () => { $("subpop").style.display = "none"; };
-$("cpCancel").onclick = () => { $("cellpop").style.display = "none"; };
-$("subpop").onkeydown = (ev) => { if (ev.key === "Escape") $("spClose").click(); };
-$("cellpop").onkeydown = (ev) => { if (ev.key === "Enter") saveCellPop(); if (ev.key === "Escape") $("cpCancel").click(); };
-$("pname").oninput = () => { draft().name = $("pname").value.trim(); draft().dirty = true; renderHeader(); };
-$("pdesc").oninput = () => { model().description = $("pdesc").value; draft().dirty = true; renderHeader(); };
-$("pfocus").onchange = () => { model().focus = $("pfocus").value || null; changed(); };
-$("save").onclick = save;
-$("discard").onclick = () => {
-  const d = draft();
-  delete drafts[cur];
-  if (!d.oldName) cur = state.default_profile || Object.keys(state.models)[0];
-  if (!cur) newProfile();
-  renderHeader(); preview();
-};
-$("dup").onclick = () => { newProfile(draft()); renderHeader(); preview(); };
-$("mkdefault").onclick = async () => {
-  try { await api("/api/default", {name: draft().oldName}); flash(t("defaultSet")); await load(); }
-  catch (e) { flash(e.message, "err"); }
-};
-$("del").onclick = async () => {
-  const d = draft();
-  if (!confirm(t("confirmDelete", {name: d.name}))) return;
-  try {
-    if (d.oldName) await api("/api/profile/delete", {name: d.oldName});
-    delete drafts[cur]; cur = null;
-    flash(t("profileDeleted", {name: d.name}));
-    await load(false);
-  } catch (e) { flash(e.message, "err"); }
-};
-$("apply").onclick = async () => {
-  $("apply").disabled = true;
-  try {
-    const d = draft();
-    const p = await api("/api/apply", {name: d.name, model: d.model});
-    flash(t("placedN", {n: p.placements.length, name: d.name + (d.dirty ? `, ${t("unsaved")}` : "")}));
-    await load();
-  } catch (e) { flash(e.message, "err"); }
-  finally { $("apply").disabled = false; }
-};
-$("refresh").onclick = () => load();
-$("addchar").onclick = () => {
-  const c = $("newchar").value.trim();
-  if (!c) return;
-  if (!extraChars.includes(c)) extraChars.push(c);
-  try { localStorage.setItem("fcwm.extraChars", JSON.stringify(extraChars)); } catch {}
-  $("newchar").value = "";
-  renderEditor();
-};
-$("newchar").onkeydown = (ev) => { if (ev.key === "Enter") $("addchar").click(); };
-$("lang").onchange = () => {
-  lang = $("lang").value;
-  try { localStorage.setItem("fcwm.lang", lang); } catch {}
-  applyStatic();
-  if (auto) setAuto(auto);
-  $("log").innerHTML = "";
-  state.events.forEach(e => logEvent(e, false));
-  load();   // Server-Meldungen (Warnungen) in der neuen Sprache holen
-};
-
-$("cfgdetails").addEventListener("toggle", async (ev) => {
-  if (ev.target.open) $("cfg").value = await api("/api/config");
-});
-$("reloadCfg").onclick = async () => {
-  try {
-    await api("/api/reload", {});
-    for (const k of Object.keys(drafts)) if (!drafts[k].dirty) delete drafts[k];
-    flash(t("cfgReloaded")); await load();
-  } catch (e) { flash(e.message, "err"); }
-};
-$("restartWm").onclick = async () => {
-  if (Object.values(drafts).some(d => d.dirty) && !confirm(t("restartDirty"))) return;
-  try {
-    await api("/api/restart", {});
-    flash(t("restartingUi"), "warn");
-    for (let i = 0; i < 40; i++) {            // warten, bis die neue Instanz antwortet
-      await new Promise(r => setTimeout(r, 500));
-      try { await api("/api/state"); for (const k of Object.keys(drafts)) delete drafts[k]; await load(); flash(t("restartedUi")); return; } catch {}
-    }
-    flash(t("restartFailed"), "err");
-  } catch (e) { flash(e.message, "err"); }
-};
-$("savecfg").onclick = async () => {
-  try {
-    await api("/api/config", {text: $("cfg").value});
-    for (const k of Object.keys(drafts)) delete drafts[k];
-    $("cfgmsg").innerHTML = `<span style="color:var(--ok)">${esc(t("saved"))}</span>`;
-    load();
-  } catch (e) { $("cfgmsg").innerHTML = `<span style="color:var(--err)">${esc(e.message)}</span>`; }
-};
-window.addEventListener("resize", () => plan && renderEditor());
-window.addEventListener("beforeunload", (ev) => { if (Object.values(drafts).some(d => d.dirty)) ev.preventDefault(); });
-
-// Fenster einklappen (Zustand pro Fenster merken)
-let collapsed = {};
-try { collapsed = JSON.parse(localStorage.getItem("fcwm.collapsed") || "{}"); } catch {}
-document.querySelectorAll(".win[data-win]").forEach(w => {
-  if (w.dataset.win in collapsed) w.classList.toggle("collapsed", collapsed[w.dataset.win]);
-  const toggle = () => {
-    collapsed[w.dataset.win] = w.classList.toggle("collapsed");
-    try { localStorage.setItem("fcwm.collapsed", JSON.stringify(collapsed)); } catch {}
-    if (!collapsed[w.dataset.win] && plan) renderEditor();
-  };
-  w.querySelector("[data-collapse]").onclick = toggle;
-  w.querySelector(".bar").ondblclick = (ev) => { if (!ev.target.closest("button")) toggle(); };
-});
-
-applyStatic();
-load();
-connectEvents();
-</script>
+<script src="js/i18n.js"></script>
+<script src="js/core.js"></script>
+<script src="js/model.js"></script>
+<script src="js/cells.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/move.js"></script>
+<script src="js/profiles.js"></script>
+<script src="js/render.js"></script>
+<script src="js/debug.js"></script>
+<script src="js/appframe.js"></script>
+<script src="js/gridlines.js"></script>
+<script src="js/controls.js"></script>
 </body>
 </html>

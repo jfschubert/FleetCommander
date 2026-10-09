@@ -1,39 +1,41 @@
-# FleetCommander – Beispielkonfiguration
-# Kopieren nach ~/.config/fcwm/config.yaml (oder config.yaml im Projektordner).
-# JSON funktioniert ebenso (gleiche Struktur, Dateiendung .json).
+# FleetCommander – example configuration
+# Copy to ~/.config/fcwm/config.yaml (or config.yaml in the project folder).
+# JSON works too (same structure, .json file extension).
 
 settings:
   backend: auto            # auto | kwin (Wayland + X11 unter Plasma) | x11 (wmctrl/xdotool)
-  language: de             # de | en – Sprache der CLI-/Server-Meldungen (Web-UI: Auswahl oben rechts)
+  language: de             # de | en – language of CLI/server messages (web UI: selector at top right)
+  web: {host: 127.0.0.1, port: 8765}   # Web UI address (fcwm web); restart after changing.
+                                       # Do not expose to the network: the API moves windows and writes the configuration.
 
-  # So werden EVE-Clients erkannt. Die Gruppe (?P<char>…) liefert den Charakternamen.
+  # How EVE clients are detected. The group (?P<char>…) yields the character name.
   match:
     caption_regex: '^EVE - (?P<char>.+)$'
-    resource_class: '^steam_app_8500$'   # Steam/Proton-EVE; leer lassen für andere Launcher
+    resource_class: '^steam_app_8500$'   # Steam/Proton EVE; leave empty for other launchers
 
-  gap: 0                   # Abstand zwischen Rasterzellen in Pixel
+  gap: 0                   # Gap between grid cells in pixels
 
-  # Fensterdekoration (Titelleiste/Rahmen). Nur relevant für das x11-Backend, das die
-  # Client-Geometrie setzt – KWin setzt die Frame-Geometrie, dort wird nichts abgezogen.
+  # Window decoration (title bar/frame). Only relevant for the x11 backend, which sets the
+  # client geometry – KWin sets the frame geometry, so nothing is subtracted there.
   decoration: {top: 0, right: 0, bottom: 0, left: 0}
 
-  min_size: [1024, 768]    # Warnung, wenn ein Slot kleiner ist (EVE-Minimum)
+  min_size: [1024, 768]    # Warn if a slot is smaller (EVE minimum)
 
-# Monitore bekommen einen frei wählbaren Alias. Zuordnung über den Anschlussnamen
-# (`fcwm monitors` zeigt sie) oder über `index:` (0 = ganz links).
+# Monitors get a freely chosen alias. Matched by connector name
+# (`fcwm monitors` lists them) or by `index:` (0 = leftmost).
 monitors:
   left:
-    output: DP-5           # Beispiel (hochkant) – `fcwm monitors` zeigt deine Anschlüsse
-    grid: 2x2              # Spalten x Zeilen – Slots zeilenweise: 0 1 / 2 3
-    reserve: auto          # Panel-Abzug: auto = KWin-Arbeitsbereich, oder manuell:
+    output: DP-5           # example (portrait) – `fcwm monitors` lists your connectors
+    grid: 2x2              # columns x rows – slots row by row: 0 1 / 2 3
+    reserve: auto          # Panel deduction: auto = KWin work area, or manual:
                            #   reserve: {top: 0, right: 0, bottom: 44, left: 0}
   center:
-    output: DP-1           # quer, 3840x2160, hier sitzt die Taskleiste
+    output: DP-1           # landscape, 3840x2160, the taskbar is here
     grid: 1x1
     reserve: auto
-    padding: 0             # zusätzlicher Innenrand (Zahl oder {top:…, …})
+    padding: 0             # additional inner margin (number or {top:…, …})
   right:
-    output: DP-4           # hochkant, 2160x3840
+    output: DP-4           # portrait, 2160x3840
     grid: 2x2
     reserve: auto
 
@@ -41,34 +43,34 @@ default_profile: Solo-Mining
 
 profiles:
   Solo-Mining:
-    description: Main gross in der Mitte, Miner links und rechts
+    description: Main large in the middle, miners left and right
     assign:
-      # Kurzform  "Charakter": "monitor:slot"
+      # Short form  "character": "monitor:slot"
       "Main": center:0
       "Alt 1":   left:0
       "Alt 2":  left:1
       "Alt 3": right:0
       "Alt 4":  right:1
-    fill: [left, right]    # weitere, nicht genannte Clients in freie Slots dieser Monitore
-    blocked:               # Felder, die nie mit EVE-Clients belegt werden
-      "right:3": {label: RIFT, match: "RIFT"}   # optional: dieses Fenster (Titel/Klasse, Regex) dort platzieren
-      "left:3": Browser                          # nur frei halten
-    focus: Main  # dieses Fenster am Ende aktivieren
+    fill: [left, right]    # further, unlisted clients go into free slots on these monitors
+    blocked:               # cells that are never filled with EVE clients
+      "right:3": {label: RIFT, match: "RIFT"}   # optional: place this window (title/class, regex) there
+      "left:3": Browser                          # just keep free
+    focus: Main  # activate this window at the end
 
   Fleet-Fight:
-    description: FC in der Mitte, Alts gestapelt auf den Seiten
-    grids:                 # Raster nur für dieses Profil überschreiben
+    description: FC in the middle, alts stacked on the sides
+    grids:                 # override the grid for this profile only
       left: 1x3
       right: 1x3
     assign:
       "Main": center:0
-      # Langform mit Span: Slot 0 über 1 Spalte x 2 Zeilen
+      # Long form with span: slot 0 across 1 column x 2 rows
       "Alt 1": {monitor: left, slot: 0, span: [1, 2]}
     fill: [left, right]
     focus: Main
 
   Multibox-Center:
-    description: Alles auf dem Hauptmonitor, Main doppelt so breit
+    description: Everything on the main monitor, main twice as wide
     grids:
       center: {cols: 2, rows: 2, col_weights: [2, 1]}
     assign:
@@ -76,13 +78,13 @@ profiles:
     fill: [center, left, right]
 
   Single-Monitor:
-    description: Nur ein Monitor – Main links, Alts rechts gestapelt
+    description: Single monitor – main on the left, alts stacked on the right
     grids:
       center: {cols: 2, rows: 1, col_weights: [2, 1]}
     assign:
       "Main": center:0
-      # Mehrere Charaktere auf demselben Slot = Stapel (erster Eintrag liegt oben)
+      # Several characters on the same slot = stack (first entry is on top)
       "Alt 1": center:1
       "Alt 2": center:1
-    fill: [center]         # weitere Clients reihum auf die center-Slots stapeln (Standard)
-    disabled_monitors: [left, right]   # diese Monitore in diesem Profil nicht verwenden
+    fill: [center]         # stack further clients round-robin onto the center slots (default)
+    disabled_monitors: [left, right]   # do not use these monitors in this profile

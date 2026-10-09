@@ -1,8 +1,8 @@
 [Unit]
 Description=FleetCommander (web UI, auto placement, hotkeys, previews)
 Documentation=file:///usr/share/doc/fcwm/README.md
-# Läuft mit der grafischen Sitzung (Plasma) und endet mit ihr – beim Beenden entlädt fcwm
-# seine KWin-Skripte und gibt die globalen Kurzbefehle frei.
+# Runs with the graphical session (Plasma) and ends with it – on exit fcwm unloads
+# its KWin scripts and releases the global shortcuts.
 PartOf=graphical-session.target
 After=graphical-session.target
 

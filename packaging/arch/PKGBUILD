@@ -1,38 +1,37 @@
 # Maintainer: Jan-Frederic Schubert <jfschubert@gmail.com>
 pkgname=fcwm
 pkgver=0.2.0
-pkgrel=1
+pkgrel=2
 pkgdesc="EVE Online window manager for KDE Plasma: grid layouts, profiles, stacks, hotkeys, live previews"
 arch=('any')
 url="https://github.com/jfschubert/FleetCommander"
 license=('GPL-3.0-or-later')
-depends=('python' 'python-yaml' 'kwin' 'kconfig' 'kscreen' 'systemd' 'xdg-utils')
+depends=('python' 'python-yaml' 'python-pyqt6-webengine' 'kwin' 'kconfig' 'kscreen' 'systemd' 'xdg-utils')
 optdepends=('python-ruamel-yaml: keep comments in config.yaml when saving from the web UI'
             'wmctrl: X11 backend without KWin'
             'xdotool: X11 backend fallback'
             'xorg-xrandr: monitor detection without kscreen')
 makedepends=('python-build' 'python-installer' 'python-wheel' 'python-setuptools')
 install=fcwm.install
-# früherer Paketname
+# former package name
 conflicts=('evewm')
 replaces=('evewm')
 backup=()
 
-# Lokaler Build aus diesem Repository: `cd packaging/arch && makepkg -si`.
-# Für das AUR stattdessen eine Quelle angeben, z. B.:
+# Local build from this repository: `cd packaging/arch && makepkg -si`.
+# For the AUR, specify a source instead, e.g.:
 #   source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 #   sha256sums=('...')        # updpkgsums
-# und in prepare() nur `cd "FleetCommander-$pkgver"` verwenden.
+# and in prepare() just use `cd "FleetCommander-$pkgver"`.
 source=()
 sha256sums=()
 
 prepare() {
-    # nur die Projektdateien übernehmen – keine persönliche config.yaml / Zustandsdatei
+    # copy only the project files – no personal config.yaml / state file
     local top="$startdir/../.."
     mkdir -p "$srcdir/$pkgname/packaging"
-    cp -r "$top"/{fcwm,tests,pyproject.toml,README.md,README.de.md,config.example.yaml} "$srcdir/$pkgname/"
+    cp -r "$top"/{fcwm,tests,pyproject.toml,README.md,README.de.md,config.example.yaml,LICENSE,NOTICE} "$srcdir/$pkgname/"
     cp "$top"/packaging/fcwm.{service,desktop} "$srcdir/$pkgname/packaging/"
-    [[ -f "$top/LICENSE" ]] && cp "$top/LICENSE" "$srcdir/$pkgname/"
     find "$srcdir/$pkgname" -name __pycache__ -type d -prune -exec rm -rf {} +
 }
 
@@ -51,7 +50,8 @@ package() {
     python -m installer --destdir="$pkgdir" dist/*.whl
     install -Dm644 packaging/fcwm.service "$pkgdir/usr/lib/systemd/user/fcwm.service"
     install -Dm644 packaging/fcwm.desktop "$pkgdir/usr/share/applications/fcwm.desktop"
+    install -Dm644 fcwm/static/fcwm.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/fcwm.svg"
     install -Dm644 README.md README.de.md config.example.yaml -t "$pkgdir/usr/share/doc/$pkgname/"
-    [[ -f LICENSE ]] && install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 LICENSE NOTICE -t "$pkgdir/usr/share/licenses/$pkgname/"
     true
 }

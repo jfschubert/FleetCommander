@@ -1,4 +1,4 @@
-"""Kommandozeile: fcwm <befehl> [optionen]"""
+"""Command line: fcwm <command> [options]"""
 from __future__ import annotations
 
 import argparse
@@ -42,8 +42,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="fcwm", description="EVE Online window manager for KDE Plasma")
     ap.add_argument("-c", "--config", help="path to config.yaml/.json")
     ap.add_argument("-b", "--backend", choices=["auto", "kwin", "x11"], help="force backend")
-    ap.add_argument("-l", "--lang", choices=list(i18n.LANGUAGES),
-                    help="language (default: settings.language or $LANG)")
+    ap.add_argument("-l", "--lang", help=f"language: {', '.join(i18n.LANGUAGES)} "
+                                          "(default: settings.language or $LANG)")
     ap.add_argument("-v", "--verbose", action="store_true")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -58,15 +58,20 @@ def main(argv: list[str] | None = None) -> int:
     wa.add_argument("profile", nargs="?")
     wa.add_argument("--initial", action="store_true", help="also place already open clients at start")
     we = sub.add_parser("web", help="start the web UI (includes the listener)")
-    we.add_argument("--host", default="127.0.0.1")
-    we.add_argument("--port", type=int, default=8765)
+    we.add_argument("--host", help="listen address (default: settings.web.host or 127.0.0.1)")
+    we.add_argument("--port", type=int, help="port (default: settings.web.port or 8765)")
     sub.add_parser("state", help="dump full state as JSON")
     op = sub.add_parser("open", help="open the web UI in the browser (starts fcwm if needed)")
-    op.add_argument("--port", type=int, default=8765)
+    op.add_argument("--port", type=int, help="port of the running instance (default: from config)")
+    apw = sub.add_parser("app", help="open the web UI in its own window (starts fcwm if needed; "
+                                     "needs PyQt6-WebEngine, otherwise opens the browser)")
+    apw.add_argument("--port", type=int, help="port of the running instance (default: from config)")
+    apw.add_argument("--native-frame", action="store_true",
+                     help="keep the KDE title bar instead of FleetCommander's own window frame")
     rl = sub.add_parser("reload", help="make the running instance re-read its config (moves no windows)")
-    rl.add_argument("--port", type=int, default=8765)
+    rl.add_argument("--port", type=int, help="port of the running instance (default: from config)")
     rs = sub.add_parser("restart", help="restart the running instance (service or `fcwm web`)")
-    rs.add_argument("--port", type=int, default=8765)
+    rs.add_argument("--port", type=int, help="port of the running instance (default: from config)")
     ini = sub.add_parser("init", help="create a starter config from the detected monitors")
     ini.add_argument("--force", action="store_true", help="overwrite an existing config")
     sub.add_parser("cleanup", help="remove KWin scripts, shortcuts, window rules and color schemes "
@@ -78,17 +83,27 @@ def main(argv: list[str] | None = None) -> int:
                         format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
     i18n.set_default(args.lang)
 
-    def _terminate(*_):  # SIGTERM (Abmelden, systemd) wie Strg+C behandeln -> KWin-Listener entladen
+    def _terminate(*_):  # treat SIGTERM (logout, systemd) like Ctrl+C -> unload KWin listener
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, _terminate)
-    if args.cmd in ("init", "cleanup", "open", "reload", "restart"):   # brauchen keine eigene Konfiguration
+    if args.cmd in ("init", "cleanup", "open", "app", "reload", "restart"):   # do not need their own configuration
         from . import maintenance
+        if getattr(args, "port", None) is None and args.cmd != "init":
+            args.port = maintenance.configured_port(args.config)
         try:
             if args.cmd == "init":
                 path = maintenance.init(args.config, args.force, i18n.lang())
                 print(t("init_done", path=path))
             elif args.cmd == "open":
                 print(maintenance.open_ui(args.port, args.config))
+            elif args.cmd == "app":
+                url = maintenance.ensure_running(args.port, args.config)
+                try:
+                    from . import appwindow
+                    return appwindow.run(url, native_frame=args.native_frame)
+                except ImportError:
+                    print(t("app_missing"), file=sys.stderr)
+                    print(maintenance.open_ui(args.port, args.config))
             elif args.cmd == "reload":
                 print(t("reloaded", path=maintenance.reload_config(args.port)))
             elif args.cmd == "restart":
@@ -135,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
             run_forever(app, args.profile, args.initial)
         elif args.cmd == "web":
             from .web import serve
-            serve(app, args.host, args.port)
+            serve(app, args.host or app.cfg.web["host"], args.port or app.cfg.web["port"])
         elif args.cmd == "state":
             json.dump(app.state(), sys.stdout, indent=2, ensure_ascii=False)
             print()

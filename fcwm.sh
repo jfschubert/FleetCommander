@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
-# Startskript – funktioniert auch als Ziel für KDE-Kurzbefehle, z. B.:  fcwm.sh apply Fleet-Fight
+# Launcher script – also works as a target for KDE shortcuts, e.g.:  fcwm.sh apply Fleet-Fight
 cd "$(dirname "$(readlink -f "$0")")" && exec python3 -m fcwm "$@"

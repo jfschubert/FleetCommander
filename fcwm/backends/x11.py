@@ -1,11 +1,11 @@
-"""X11-Backend über wmctrl (Liste/Verschieben) mit xdotool als Fallback.
+"""X11 backend via wmctrl (list/move) with xdotool as fallback.
 
-Für X11-Sessions ohne KWin bzw. als Alternative. Unter Wayland funktioniert das
-nicht zuverlässig (XWayland-Fenster lassen sich so nicht verschieben) – dort
-das KWin-Backend verwenden.
+For X11 sessions without KWin, or as an alternative. Under Wayland this does
+not work reliably (XWayland windows cannot be moved this way) – use the
+KWin backend there.
 
-Hinweis: wmctrl -e setzt i. d. R. die *Client*-Geometrie (ohne Titelleiste);
-deshalb zieht der Layout-Code vorher `settings.decoration` ab.
+Note: wmctrl -e usually sets the *client* geometry (without title bar);
+so the layout code subtracts `settings.decoration` beforehand.
 """
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ class X11Backend(Backend):
         wins = []
         for line in _run("wmctrl", "-lpGx").splitlines():
             parts = line.split(None, 9)
-            if len(parts) < 9 or parts[1] == "-1":  # -1 = Sticky/Panel
+            if len(parts) < 9 or parts[1] == "-1":  # -1 = sticky/panel
                 continue
             wid, _, pid, x, y, w, h, cls = parts[:8]
             title = parts[9] if len(parts) > 9 else ""
@@ -50,7 +50,12 @@ class X11Backend(Backend):
 
     def _list_xdotool(self) -> list[Window]:
         wins = []
-        ids = _run("xdotool", "search", "--onlyvisible", "--name", ".").split()
+        # xdotool reports "nothing found" with exit code 1 – that is an empty list, not an error
+        r = subprocess.run(["xdotool", "search", "--onlyvisible", "--name", "."],
+                           capture_output=True, text=True, timeout=10)
+        if r.returncode not in (0, 1):
+            raise subprocess.CalledProcessError(r.returncode, r.args, r.stdout, r.stderr)
+        ids = r.stdout.split()
         for wid in ids:
             try:
                 title = _run("xdotool", "getwindowname", wid).strip()

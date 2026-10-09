@@ -13,7 +13,8 @@ MSG
 }
 
 post_upgrade() {
-    echo "==> Restart the running instance to use the new version: fcwm restart"
+    echo "==> Restart the running instance to use the new version (as your user): fcwm restart"
+    echo "    Until then the web UI may show untranslated keys or fail to load."
 }
 
 pre_remove() {

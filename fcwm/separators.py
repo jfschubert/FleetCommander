@@ -1,13 +1,13 @@
-"""Trennlinien zwischen benachbarten Clients.
+"""Separator lines between adjacent clients.
 
-Das Raster lässt zwischen den Zellen eine Lücke von `separator.width` Pixeln. Gezeichnet wird
-nur dort, wo zwei Fenster tatsächlich aneinanderstossen – nicht am Rand, nicht neben leeren
-Feldern, und pro gemeinsamer Kante genau eine Linie.
+The grid leaves a gap of `separator.width` pixels between cells. A line is drawn
+only where two windows actually abut – not at the edge, not next to empty
+cells, and exactly one line per shared edge.
 
-Die Linien sind kleine, klickdurchlässige KWin-Fenster (QML-Skript). KWin legt solche internen
-Fenster immer ganz nach oben. Damit sie sich trotzdem wie Hintergrund verhalten, blendet das Skript
-eine Linie aus, sobald ein Fenster, das im Stapel ÜBER den beiden Nachbarn liegt, die Lücke überdeckt
-(z. B. das fokussierte Fenster); ebenso, wenn auf einer Seite kein sichtbarer Client steht.
+The lines are small, click-through KWin windows (QML script). KWin always puts such internal
+windows on top. To make them behave like background anyway, the script hides
+a line as soon as a window that sits ABOVE both neighbors in the stack covers the gap
+(e.g. the focused window); likewise when there is no visible client on one side.
 """
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ Item {
     readonly property bool active: aw ? ((cap.test(aw.caption) && (!cls || cls.test(aw.resourceClass)))
                                          || extraIds.indexOf(aw.internalId.toString()) >= 0) : false
     property int rev: 0
-    // Takt: sofort bei Stapel-/Fokuswechsel, sonst alle 250 ms (z. B. während ein Fenster gezogen wird)
+    // Tick: immediately on stack/focus change, otherwise every 250 ms (e.g. while a window is being dragged)
     Timer { interval: 250; running: true; repeat: true; onTriggered: root.rev++ }
     Connections {
         target: KWinComponents.Workspace
@@ -61,21 +61,21 @@ Item {
     function sameRect(g, r) {
         return Math.abs(g.x - r[0]) < 3 && Math.abs(g.y - r[1]) < 3 && Math.abs(g.width - r[2]) < 3 && Math.abs(g.height - r[3]) < 3;
     }
-    // Stapel-Position des obersten sichtbaren Fensters auf dem Platz `r` (-1 = keins)
+    // Stack position of the topmost visible window on slot `r` (-1 = none)
     function topIndex(ws, r) {
         for (var i = ws.length - 1; i >= 0; i--)
             if (ws[i].normalWindow && shown(ws[i]) && sameRect(ws[i].frameGeometry, r)) return i;
         return -1;
     }
-    // Die Linie gehört zu ihren beiden Nachbarn und liegt auf deren Ebene. Verdeckt wird sie nur von
-    // Fenstern, die im Stapel ÜBER den Nachbarn liegen (z. B. das fokussierte Fenster) – Fenster
-    // dahinter zählen nicht. KWin zeigt unsere Overlays immer zuoberst; so verhält sich die Linie
-    // trotzdem, als läge sie im Hintergrund.
+    // The line belongs to its two neighbors and sits on their level. It is only covered by
+    // windows that sit ABOVE the neighbors in the stack (e.g. the focused window) – windows
+    // behind them don't count. KWin always shows our overlays on top; this makes the line
+    // behave as if it were in the background anyway.
     function lineVisible(m, tick) {
         if (!(always || active)) return false;
-        var ws = KWinComponents.Workspace.stackingOrder;   // unten -> oben
+        var ws = KWinComponents.Workspace.stackingOrder;   // bottom -> top
         var ia = topIndex(ws, m.a), ib = topIndex(ws, m.b);
-        if (ia < 0 || ib < 0) return false;                  // nur zwischen zwei sichtbaren Fenstern
+        if (ia < 0 || ib < 0) return false;                  // only between two visible windows
         var l = m.line;
         for (var k = Math.max(ia, ib) + 1; k < ws.length; k++) {
             var w = ws[k], g = w.frameGeometry;
@@ -91,7 +91,7 @@ Item {
             x: modelData.line[0]; y: modelData.line[1]; width: modelData.line[2]; height: modelData.line[3]
             color: COLOR
             title: "fcwm-separator"
-            // nur, wenn auf beiden Seiten ein Fenster steht und nichts anderes die Lücke überdeckt
+            // only if there is a window on both sides and nothing else covers the gap
             visible: root.lineVisible(modelData, root.rev)
         }
     }
@@ -100,12 +100,12 @@ Item {
 
 
 def compute_lines(rects: list[Rect], gap: int) -> list[list[int]]:
-    """Linien in den Lücken zwischen aneinanderstossenden Rechtecken (Toleranz 1 px)."""
+    """Lines in the gaps between abutting rectangles (tolerance 1 px)."""
     return [line for line, _, _ in line_pairs(rects, gap)]
 
 
 def line_pairs(rects: list[Rect], gap: int) -> list[tuple[list[int], list[int], list[int]]]:
-    """Wie compute_lines, zusätzlich mit den beiden angrenzenden Rechtecken je Linie."""
+    """Like compute_lines, additionally with the two adjacent rectangles per line."""
     if gap <= 0:
         return []
     uniq = list({r.as_list().__repr__(): r for r in rects}.values())
@@ -114,12 +114,12 @@ def line_pairs(rects: list[Rect], gap: int) -> list[tuple[list[int], list[int], 
         for b in uniq:
             if a is b:
                 continue
-            # b rechts von a
+            # b to the right of a
             if abs(b.x - (a.x + a.w + gap)) <= 1:
                 top, bottom = max(a.y, b.y), min(a.y + a.h, b.y + b.h)
                 if bottom - top > 0:
                     found.setdefault((a.x + a.w, top, b.x - (a.x + a.w), bottom - top), (a, b))
-            # b unter a
+            # b below a
             if abs(b.y - (a.y + a.h + gap)) <= 1:
                 left, right = max(a.x, b.x), min(a.x + a.w, b.x + b.w)
                 if right - left > 0:
@@ -144,7 +144,7 @@ class SeparatorOverlay:
             self._dir = None
 
     def show(self, cfg, plan) -> int:
-        """Linien für den aktuellen Plan anzeigen (bzw. entfernen). Rückgabe: Anzahl Linien."""
+        """Show lines for the current plan (or remove them). Returns: number of lines."""
         self.clear()
         sep = cfg.separator or {}
         width = int(sep.get("width") or 0)
@@ -161,7 +161,7 @@ class SeparatorOverlay:
                    .replace("CLS", json.dumps(cfg.class_re.pattern if cfg.class_re else ""))
                    .replace("COLOR", json.dumps(sep.get("color") or "#3c3c3c"))
                    .replace("SHOW_ALWAYS", "false" if sep.get("show") == "eve" else "true"))
-        # KWin merkt sich QML-Dateien pro Pfad -> jedes Mal ein neues Verzeichnis
+        # KWin remembers QML files per path -> a new directory every time
         self._dir = Path(tempfile.mkdtemp(prefix="fcwm-sep-"))
         path = self._dir / "main.qml"
         path.write_text(qml, encoding="utf-8")
@@ -169,7 +169,7 @@ class SeparatorOverlay:
             out = _busctl("/Scripting", "org.kde.kwin.Scripting", "loadDeclarativeScript", "ss", str(path), PLUGIN)
             sid = out.split()[-1] if out else ""
             if sid.lstrip("-").isdigit() and int(sid) >= 0:
-                start_loaded_scripts()   # nicht per Skript-ID starten – siehe backends/kwin.py
+                start_loaded_scripts()   # don't start by script ID – see backends/kwin.py
             else:
-                log.warning("Trennlinien: KWin hat das Overlay nicht geladen (%s)", out)
+                log.warning("separators: KWin did not load the overlay (%s)", out)
         return len(lines)

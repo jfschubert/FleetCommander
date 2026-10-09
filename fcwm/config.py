@@ -1,4 +1,4 @@
-"""Laden/Validieren der Konfiguration (YAML oder JSON)."""
+"""Loading/validating the configuration (YAML or JSON)."""
 from __future__ import annotations
 
 import json
@@ -11,6 +11,8 @@ from pathlib import Path
 from .geometry import GridSpec, Insets
 from .i18n import ConfigError, FcwmError
 
+DEFAULT_WEB = {"host": "127.0.0.1", "port": 8765}
+
 DEFAULT_PATHS = [
     Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "fcwm" / "config.yaml",
     Path(__file__).resolve().parent.parent / "config.yaml",
@@ -20,11 +22,12 @@ DEFAULT_PATHS = [
 @dataclass
 class MonitorCfg:
     alias: str
-    output: str | None          # Anschlussname, z. B. "DP-1"
-    index: int | None           # alternativ: Index (0 = ganz links)
+    output: str | None          # connector name, e.g. "DP-1"
+    index: int | None           # alternatively: index (0 = leftmost)
     grid: GridSpec
-    reserve: Insets | str       # "auto" oder Insets (Panel-Abzug)
+    reserve: Insets | str       # "auto" or insets (panel deduction)
     padding: Insets
+    label: str = ""             # display name (empty = automatic, relative to the primary monitor)
 
 
 @dataclass
@@ -33,7 +36,7 @@ class Assignment:
     monitor: str
     slot: int
     span: tuple[int, int] = (1, 1)
-    sub: int | None = None      # Zelle im Subgrid von `slot` ("center:1.3" -> slot 1, sub 3)
+    sub: int | None = None      # cell in the subgrid of `slot` ("center:1.3" -> slot 1, sub 3)
 
 
 def parse_slot(text) -> tuple[int, int | None]:
@@ -52,23 +55,23 @@ class Profile:
     description: str = ""
     grids: dict[str, GridSpec] = field(default_factory=dict)
     assign: list[Assignment] = field(default_factory=list)
-    fill: list[str] = field(default_factory=list)   # Monitore für nicht zugewiesene Clients
+    fill: list[str] = field(default_factory=list)   # monitors for unassigned clients
     focus: str | None = None
-    stack_overflow: bool = True   # kein freier Slot mehr -> reihum auf fill-Slots stapeln
-    disabled: list[str] = field(default_factory=list)  # Monitore, die dieses Profil nicht verwendet
-    blocked: list["BlockedCell"] = field(default_factory=list)  # freigehaltene Felder (Browser, RIFT …)
-    subgrids: dict[tuple[str, int], GridSpec] = field(default_factory=dict)  # (monitor, slot) -> Raster in der Zelle
-    overflow: list["OverflowCell"] = field(default_factory=list)  # Überlauf-Felder in Reihenfolge
-    hotkey: str = ""                                  # globaler Kurzbefehl: dieses Profil anwenden
-    stack_hotkeys: dict[str, str] = field(default_factory=dict)  # "center:1" -> Kurzbefehl zum Durchschalten
-    # Vorschau-Leiste auf einem Stapel: "center:1" -> {mode: stack|all, edge: bottom|top|left|right, size: %, show}
+    stack_overflow: bool = True   # no free slot left -> stack round-robin on fill slots
+    disabled: list[str] = field(default_factory=list)  # monitors this profile does not use
+    blocked: list["BlockedCell"] = field(default_factory=list)  # reserved cells (browser, RIFT …)
+    subgrids: dict[tuple[str, int], GridSpec] = field(default_factory=dict)  # (monitor, slot) -> grid inside the cell
+    overflow: list["OverflowCell"] = field(default_factory=list)  # overflow cells in order
+    hotkey: str = ""                                  # global shortcut: apply this profile
+    stack_hotkeys: dict[str, str] = field(default_factory=dict)  # "center:1" -> shortcut for cycling through
+    # Preview strip on a stack: "center:1" -> {mode: stack|all, edge: bottom|top|left|right, size: %, show}
     stack_previews: dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass
 class OverflowCell:
-    """Nimmt Clients auf, für die kein Auffüll-Feld mehr frei ist (als Stapel). `max` begrenzt die
-    Anzahl Charaktere im Feld; das letzte Überlauf-Feld nimmt immer alle übrigen auf."""
+    """Takes clients for which no fill cell is free anymore (as a stack). `max` limits the
+    number of characters in the cell; the last overflow cell always takes all the rest."""
     monitor: str
     slot: int
     sub: int | None = None
@@ -77,15 +80,19 @@ class OverflowCell:
 
 @dataclass
 class BlockedCell:
-    """Ein Feld, das nie mit EVE-Clients belegt wird. Optional landet dort ein anderes Fenster,
-    dessen Titel oder Fensterklasse auf `match` passt (Regex, ohne Gross-/Kleinschreibung)."""
+    """A cell that is never occupied by EVE clients. Optionally another window ends up there
+    whose title or window class matches `match` (regex, case-insensitive)."""
     monitor: str
     slot: int
     label: str = ""
     match: str = ""
     sub: int | None = None
-    preview: str = ""           # "", "all" (alle Clients) oder "hidden" (nur verdeckte/minimierte)
-    preview_show: str = "always"  # "always" oder "eve" (nur sichtbar, solange ein EVE-Client aktiv ist)
+    preview: str = ""           # "", "all" (all clients) or "hidden" (only covered/minimized)
+    preview_show: str = "always"  # "always" or "eve" (visible only while an EVE client is active)
+    stack: bool = False         # take all matching windows as a stack (otherwise only the first)
+    catch_all: bool = False     # catch-all cell: newly opened windows without their own rule end up here
+    resize: bool = True         # False = keep window size (at most the cell size), center within the cell
+    exclude: str = ""           # catch-all cell: do not catch these windows (title/class, regex)
 
 
 @dataclass
@@ -102,23 +109,25 @@ class Config:
     default_profile: str | None
     raw_text: str
     language: str | None = None
-    # globale Kurzbefehle: next_profile, prev_profile, cycle_stack (Qt-Schreibweise, z. B. "Meta+Ctrl+Right")
+    # global shortcuts: next_profile, prev_profile, cycle_stack (Qt notation, e.g. "Meta+Ctrl+Right")
     hotkeys: dict[str, str] = field(default_factory=dict)
-    # Titelleisten der EVE-Clients: {"hide": bool, "color": "#rrggbb"|""}
+    # Title bars of the EVE clients: {"hide": bool, "color": "#rrggbb"|""}
     titlebar: dict = field(default_factory=dict)
-    # pro Charakter: {"Name": {"color": "#rrggbb"}}
+    # per character: {"Name": {"color": "#rrggbb"}}
     characters: dict[str, dict] = field(default_factory=dict)
-    # Trennlinie zwischen benachbarten Clients: {"width": px, "color": "#rrggbb"}
+    # Separator line between adjacent clients: {"width": px, "color": "#rrggbb"}
     separator: dict = field(default_factory=dict)
+    # Web-UI: {"host": str, "port": int} – CLI options --host/--port take precedence
+    web: dict = field(default_factory=lambda: dict(DEFAULT_WEB))
 
     @property
     def effective_gap(self) -> int:
-        """Abstand zwischen Rasterzellen: die Trennlinie braucht genau ihre Breite als Lücke."""
+        """Gap between grid cells: the separator line needs exactly its width as a gap."""
         return max(self.gap, int(self.separator.get("width") or 0))
 
 
 def _parse_assign(char: str, value, monitors: dict) -> Assignment:
-    if isinstance(value, str):  # Kurzform "center:0" bzw. "center:1.3" (Subgrid)
+    if isinstance(value, str):  # short form "center:0" or "center:1.3" (subgrid)
         mon, _, slot = value.partition(":")
         main, sub = parse_slot(slot or 0)
         a = Assignment(char, mon.strip(), main, sub=sub)
@@ -181,19 +190,25 @@ def parse_profile(name: str, p: dict | None, monitors: dict[str, MonitorCfg]) ->
         if mon not in monitors:
             raise ConfigError("unknown_monitor", mon=mon, where=f"{name} / blocked")
         v = v if isinstance(v, dict) else {"label": v or ""}
-        if v.get("match"):
-            try:
-                re.compile(v["match"])
-            except re.error as e:
-                raise ConfigError("invalid_regex", value=v["match"], error=str(e)) from e
+        for k in ("match", "exclude"):
+            if v.get(k):
+                try:
+                    re.compile(v[k])
+                except re.error as e:
+                    raise ConfigError("invalid_regex", value=v[k], error=str(e)) from e
         main, sub = parse_slot(slot or 0)
         preview = str(v.get("preview") or "")
         if preview not in ("", "all", "hidden"):
             raise ConfigError("invalid_preview", value=preview)
         show = str(v.get("show") or "always")
+        windows = not preview          # preview and windows in the same cell are mutually exclusive
         blocked.append(BlockedCell(mon, main, str(v.get("label") or ""),
-                                   "" if preview else str(v.get("match") or ""), sub, preview,
-                                   show if show in ("always", "eve") else "always"))
+                                   str(v.get("match") or "") if windows else "", sub, preview,
+                                   show if show in ("always", "eve") else "always",
+                                   stack=windows and bool(v.get("stack")),
+                                   catch_all=windows and bool(v.get("catch_all")),
+                                   resize=bool(v.get("resize", True)),
+                                   exclude=str(v.get("exclude") or "") if windows else ""))
     return Profile(
         name=name, description=p.get("description", "") or "", grids=grids, blocked=blocked, subgrids=subgrids,
         overflow=overflow, hotkey=str(p.get("hotkey") or ""), stack_hotkeys=stack_hotkeys,
@@ -216,6 +231,17 @@ def _yaml():
     return yaml
 
 
+def parse_web(s: dict) -> dict:
+    web = s.get("web") or {}
+    try:
+        port = int(web.get("port") or DEFAULT_WEB["port"])
+    except (TypeError, ValueError) as e:
+        raise ConfigError("invalid_port", value=web.get("port")) from e
+    if not 1 <= port <= 65535:
+        raise ConfigError("invalid_port", value=port)
+    return {"host": str(web.get("host") or DEFAULT_WEB["host"]), "port": port}
+
+
 def parse_text(text: str, path: Path) -> Config:
     data = (_yaml().safe_load(text) or {}) if _is_yaml(path) else json.loads(text)
 
@@ -231,6 +257,7 @@ def parse_text(text: str, path: Path) -> Config:
             grid=GridSpec.parse(m.get("grid", "1x1")),
             reserve=reserve if reserve == "auto" else Insets.parse(reserve),
             padding=Insets.parse(m.get("padding", 0)),
+            label=str(m.get("label") or ""),
         )
     if not monitors:
         raise ConfigError("no_monitors")
@@ -259,12 +286,13 @@ def parse_text(text: str, path: Path) -> Config:
         separator={"width": max(0, min(20, int((s.get("separator") or {}).get("width") or 0))),
                    "color": str((s.get("separator") or {}).get("color") or "#3c3c3c"),
                    "show": "eve" if (s.get("separator") or {}).get("show") == "eve" else "always"},
+        web=parse_web(s),
     )
 
 
 def migrate_legacy() -> Path | None:
-    """Einmalig: ~/.config/evewm (früherer Projektname) nach ~/.config/fcwm kopieren.
-    Der alte Ordner bleibt als Sicherung erhalten."""
+    """One-time: copy ~/.config/evewm (former project name) to ~/.config/fcwm.
+    The old folder is kept as a backup."""
     new_dir = DEFAULT_PATHS[0].parent
     old_dir = new_dir.parent / "evewm"
     if new_dir.exists() or not old_dir.is_dir():
@@ -297,15 +325,15 @@ def load(explicit: str | None = None) -> Config:
 
 
 # --------------------------------------------------------------------------
-# Profile bearbeiten (Web-Editor)
+# Editing profiles (web editor)
 #
-# Das Edit-Modell ist ein einfaches Dict, wie es die Web-UI schickt:
+# The edit model is a plain dict, as sent by the web UI:
 #   {"description": str, "grids": {alias: [cols, rows]}, "fill": [alias, ...],
 #    "focus": str|None, "assign": [{"char", "monitor", "slot", "span": [c, r]}]}
 # --------------------------------------------------------------------------
 
 def weights_model(g: GridSpec):
-    """GridSpec -> [spaltengewichte|None, zeilengewichte|None, {zeile: spaltengewichte}|None] (None = gleichmässig)."""
+    """GridSpec -> [column weights|None, row weights|None, {row: column weights}|None] (None = uniform)."""
     if g.uniform:
         return None
     return [list(g.col_weights) or None, list(g.row_weights) or None,
@@ -321,7 +349,7 @@ def spec_from_model(cols: int, rows: int, weights) -> GridSpec:
 
 
 def spec_to_raw(spec: GridSpec):
-    """Kompakteste Schreibweise: "2x2" oder Dict mit nur den nötigen Gewichten."""
+    """Most compact notation: "2x2" or a dict with only the necessary weights."""
     if spec.uniform:
         return f"{spec.cols}x{spec.rows}"
     g = {"cols": spec.cols, "rows": spec.rows}
@@ -341,7 +369,7 @@ def profile_to_model(cfg: Config, profile: Profile) -> dict:
         "description": profile.description,
         "grids": {a: [g.cols, g.rows] for a, g in
                   ((a, profile.grids.get(a, mc.grid)) for a, mc in cfg.monitors.items())},
-        # verschobene Rasterlinien: {alias: [spaltengewichte|None, zeilengewichte|None]}
+        # moved grid lines: {alias: [column weights|None, row weights|None]}
         "weights": {a: weights_model(g) for a, g in
                     ((a, profile.grids.get(a, mc.grid)) for a, mc in cfg.monitors.items())
                     if not g.uniform},
@@ -350,7 +378,9 @@ def profile_to_model(cfg: Config, profile: Profile) -> dict:
         "stack_overflow": profile.stack_overflow,
         "disabled": list(profile.disabled),
         "blocked": [{"monitor": b.monitor, "slot": b.slot, "sub": b.sub, "label": b.label, "match": b.match,
-                     "preview": b.preview, "preview_show": b.preview_show} for b in profile.blocked],
+                     "preview": b.preview, "preview_show": b.preview_show, "stack": b.stack,
+                     "catch_all": b.catch_all, "resize": b.resize, "exclude": b.exclude}
+                    for b in profile.blocked],
         "stack_previews": {k: dict(v) for k, v in profile.stack_previews.items()},
         "subgrids": [{"monitor": m, "slot": s, "grid": [g.cols, g.rows], "weights": weights_model(g)}
                      for (m, s), g in profile.subgrids.items()],
@@ -363,7 +393,7 @@ def profile_to_model(cfg: Config, profile: Profile) -> dict:
 
 
 def model_to_raw(cfg: Config, model: dict, old_raw: dict | None = None) -> dict:
-    """Edit-Modell -> kompakte Konfigurationsform (wie man sie von Hand schreiben würde)."""
+    """Edit model -> compact configuration form (as one would write it by hand)."""
     old_grids = (old_raw or {}).get("grids") or {}
     raw: dict = {}
     if model.get("description"):
@@ -380,9 +410,9 @@ def model_to_raw(cfg: Config, model: dict, old_raw: dict | None = None) -> dict:
         default = cfg.monitors[alias].grid
         prev = old_grids.get(alias)
         if spec.same_as(default):
-            continue                               # entspricht dem Monitor-Standard -> nicht speichern
+            continue                               # matches the monitor default -> do not save
         if prev is not None and GridSpec.parse(prev).same_as(spec):
-            grids[alias] = prev                    # unverändert -> Schreibweise des Nutzers behalten
+            grids[alias] = prev                    # unchanged -> keep the user's notation
         else:
             grids[alias] = spec_to_raw(spec)
     if grids:
@@ -453,12 +483,23 @@ def model_to_raw(cfg: Config, model: dict, old_raw: dict | None = None) -> dict:
                 entry["show"] = "eve"
             blocked[key] = entry
         else:
-            blocked[key] = {"label": label, "match": match} if match else label
+            entry = {"label": label}
+            if match:
+                entry["match"] = match
+            if b.get("stack") and match:
+                entry["stack"] = True
+            if b.get("catch_all"):
+                entry["catch_all"] = True
+                if (b.get("exclude") or "").strip():
+                    entry["exclude"] = b["exclude"].strip()
+            if b.get("resize") is False and (match or b.get("catch_all")):
+                entry["resize"] = False
+            blocked[key] = entry if len(entry) > 1 else label   # only reserve -> short form
     if blocked:
         raw["blocked"] = blocked
     if model.get("disabled"):
         raw["disabled_monitors"] = [a for a in cfg.monitors if a in model["disabled"]]
-    if model.get("stack_overflow") is False:     # Standard ist an – nur das Abschalten speichern
+    if model.get("stack_overflow") is False:     # default is on – only save turning it off
         raw["stack_overflow"] = False
     if model.get("focus"):
         raw["focus"] = model["focus"]
@@ -471,11 +512,11 @@ def profile_from_model(cfg: Config, name: str, model: dict) -> Profile:
 
 
 def _load_doc(path: Path):
-    """Lädt die Datei so, dass sie möglichst verlustfrei zurückgeschrieben werden kann.
+    """Loads the file so that it can be written back as losslessly as possible.
 
-    Mit ruamel.yaml bleiben Kommentare und Formatierung erhalten; ohne fällt es auf
-    PyYAML zurück (Kommentare gehen dann verloren – es wird eine .bak angelegt).
-    Rückgabe: (doc, dumper)
+    With ruamel.yaml, comments and formatting are preserved; without it, falls back to
+    PyYAML (comments are then lost – a .bak is created).
+    Returns: (doc, dumper)
     """
     text = path.read_text(encoding="utf-8")
     if not _is_yaml(path):
@@ -487,7 +528,7 @@ def _load_doc(path: Path):
         y = YAML()
         y.preserve_quotes = True
         y.width = 120
-        y.default_flow_style = None   # kurze Listen wie [1, 2] inline schreiben
+        y.default_flow_style = None   # write short lists like [1, 2] inline
 
         def dump(d):
             buf = StringIO()
@@ -501,7 +542,7 @@ def _load_doc(path: Path):
 
 
 def _replace_key(mapping, old_key, new_key, value):
-    """Setzt mapping[new_key] = value an der Position von old_key (Reihenfolge bleibt)."""
+    """Sets mapping[new_key] = value at the position of old_key (order is preserved)."""
     if old_key in mapping and hasattr(mapping, "insert"):        # ruamel CommentedMap
         pos = list(mapping).index(old_key)
         del mapping[old_key]
@@ -517,7 +558,7 @@ def _replace_key(mapping, old_key, new_key, value):
 
 def _write_doc(path: Path, doc, dump) -> None:
     text = dump(doc)
-    parse_text(text, path)                        # validieren, bevor etwas überschrieben wird
+    parse_text(text, path)                        # validate before anything is overwritten
     bak = path.with_name(path.name + ".bak")
     bak.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
     path.write_text(text, encoding="utf-8")
@@ -562,8 +603,10 @@ def set_default_profile(cfg: Config, name: str) -> None:
 
 
 def save_settings(cfg: Config, hotkeys: dict | None = None, titlebar: dict | None = None,
-                  characters: dict | None = None, separator: dict | None = None) -> None:
-    """Globale Einstellungen aus der Web-UI zurückschreiben (nur die übergebenen Bereiche)."""
+                  characters: dict | None = None, separator: dict | None = None,
+                  monitor_labels: dict | None = None,
+                  web: dict | None = None) -> None:
+    """Write global settings from the web UI back (only the sections passed)."""
     doc, dump = _load_doc(cfg.path)
     if hotkeys is not None:
         hk = {k: v for k, v in hotkeys.items() if v}
@@ -580,6 +623,18 @@ def save_settings(cfg: Config, hotkeys: dict | None = None, titlebar: dict | Non
             settings["titlebar"] = tb
         elif "titlebar" in settings:
             del settings["titlebar"]
+    if monitor_labels is not None:
+        for alias, label in monitor_labels.items():
+            mons = doc.get("monitors") or {}
+            if alias not in mons:
+                raise ConfigError("unknown_monitor", mon=alias, where="monitor_labels")
+            if mons[alias] is None:
+                mons[alias] = {}
+            label = str(label or "").strip()
+            if label:
+                mons[alias]["label"] = label
+            elif "label" in mons[alias]:
+                del mons[alias]["label"]
     if separator is not None:
         settings = doc.setdefault("settings", {})
         width = max(0, min(20, int(separator.get("width") or 0)))
@@ -589,6 +644,13 @@ def save_settings(cfg: Config, hotkeys: dict | None = None, titlebar: dict | Non
                 settings["separator"]["show"] = "eve"
         elif "separator" in settings:
             del settings["separator"]
+    if web is not None:
+        settings = doc.setdefault("settings", {})
+        w = parse_web({"web": web})
+        if w == DEFAULT_WEB:
+            settings.pop("web", None)
+        else:
+            settings["web"] = {k: v for k, v in w.items() if v != DEFAULT_WEB[k]}
     if characters is not None:
         chars = {k: {"color": v["color"]} for k, v in characters.items() if v and v.get("color")}
         if chars:

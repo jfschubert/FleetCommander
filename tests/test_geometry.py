@@ -30,7 +30,7 @@ class GridTest(unittest.TestCase):
             span_cells(cells, g, 1, (2, 1))
 
     def test_columns_per_row(self):
-        # Zeile 0 = 50:50, Zeile 1 = 75:25
+        # row 0 = 50:50, row 1 = 75:25
         g = GridSpec.parse({"cols": 2, "rows": 2, "row_col_weights": {1: [75, 25]}})
         cells = grid_cells(Rect(0, 0, 400, 200), g)
         self.assertEqual([c.w for c in cells], [200, 200, 300, 100])
@@ -58,9 +58,9 @@ class PlanTest(unittest.TestCase):
                 self.win(3, "EVE Launcher"), self.win(4, "EVE - Foo - Brave", "brave-browser")]
         plan = make_plan(self.cfg, "Solo-Mining", wins, self.mons)
         got = {p.label for p in plan.placements}
-        # New Alt landet im ersten freien fill-Slot (left:0/1 sind für fehlende Chars reserviert)
+        # New Alt lands in the first free fill slot (left:0/1 are reserved for missing chars)
         self.assertEqual(got, {"Xondana Fulier@center:0", "New Alt@left:2"})
-        self.assertEqual(plan.placements[0].rect, Rect(2160, 1354, 3840, 2116))  # Panel abgezogen
+        self.assertEqual(plan.placements[0].rect, Rect(2160, 1354, 3840, 2116))  # panel deducted
         self.assertIn("Lady Forever", plan.missing)
 
     def test_decoration_for_client_geometry_backends(self):
@@ -80,7 +80,7 @@ class StackTest(PlanTest):
         plan = make_plan(self.cfg, prof, wins, self.mons)
         rects = {p.char: p.rect for p in plan.placements}
         self.assertEqual(rects["A"], rects["B"])
-        # B zuerst nach vorn, dann A -> A (erster Eintrag) liegt oben
+        # B to front first, then A -> A (first entry) is on top
         self.assertEqual(plan.raise_order(), ["2", "1"])
         self.assertEqual(plan.raise_order({"2"}), ["2"])
 
@@ -105,7 +105,7 @@ class DisabledMonitorTest(PlanTest):
         self.assertNotIn("left", plan.layouts)
         self.assertEqual(plan.disabled, ["left"])
         got = {p.char: f"{p.monitor}:{p.slot}" for p in plan.placements}
-        self.assertEqual(got, {"A": "right:0", "B": "right:1"})   # A landet per fill auf right
+        self.assertEqual(got, {"A": "right:0", "B": "right:1"})   # A lands on right via fill
         self.assertTrue(any("left" in w for w in plan.warnings))
 
     def test_overflow_stacks_by_default(self):
@@ -124,7 +124,7 @@ class BlockedCellTest(PlanTest):
                              self.cfg.monitors)
         wins = [self.win(1, "EVE - A"), self.win(2, "EVE - B"), self.win(3, "RIFT Intel", "java")]
         plan = make_plan(self.cfg, prof, wins, self.mons)
-        self.assertEqual({p.slot for p in plan.placements}, {0})      # beide auf Slot 0 gestapelt
+        self.assertEqual({p.slot for p in plan.placements}, {0})      # both stacked on slot 0
         self.assertEqual([(p.window.id, p.slot) for p in plan.extra], [("3", 1)])
         self.assertEqual(plan.blocked[0]["window"], "RIFT Intel")
 
@@ -134,9 +134,9 @@ class BlockedCellTest(PlanTest):
                                    "blocked": {"center:1": {"label": "Alts", "preview": "hidden", "match": "x"}}},
                              self.cfg.monitors)
         plan = make_plan(self.cfg, prof, [self.win(1, "EVE - A"), self.win(2, "EVE - B")], self.mons)
-        self.assertEqual({p.slot for p in plan.placements}, {0})          # Vorschau-Feld bleibt frei
+        self.assertEqual({p.slot for p in plan.placements}, {0})          # preview cell stays free
         self.assertEqual(plan.blocked[0]["preview"], "hidden")
-        self.assertEqual(plan.blocked[0]["match"], "")                    # Vorschau schliesst Fenster-Muster aus
+        self.assertEqual(plan.blocked[0]["match"], "")                    # preview excludes window pattern
         raw = model_to_raw(self.cfg, profile_to_model(self.cfg, prof))
         self.assertEqual(raw["blocked"], {"center:1": {"label": "Alts", "preview": "hidden"}})
 
@@ -148,7 +148,7 @@ class BlockedCellTest(PlanTest):
         plan = make_plan(self.cfg, prof, [], self.mons)
         sp = plan.stack_previews[0]
         self.assertEqual(sp["stack"], [2160, 1354, 3840, 2116])
-        self.assertEqual(sp["rect"], [2160 + 3840 - 768, 1354, 768, 2116])   # 20 % rechts
+        self.assertEqual(sp["rect"], [2160 + 3840 - 768, 1354, 768, 2116])   # 20 % on the right
         raw = model_to_raw(self.cfg, profile_to_model(self.cfg, prof))
         self.assertEqual(raw["stack_previews"], {"center:0": {"mode": "stack", "edge": "right", "size": 20}})
 
@@ -158,6 +158,66 @@ class BlockedCellTest(PlanTest):
                              self.cfg.monitors)
         raw = model_to_raw(self.cfg, profile_to_model(self.cfg, prof))
         self.assertEqual(raw["blocked"], {"left:2": "Browser", "right:3": {"label": "RIFT", "match": "rift"}})
+
+
+
+class WindowZoneTest(PlanTest):
+    """Window cells: stack of other windows and catch-all cell for new windows."""
+
+    def prof(self, blocked):
+        from fcwm.config import parse_profile
+        return parse_profile("W", {"grids": {"center": "2x2"}, "fill": ["center"], "blocked": blocked},
+                             self.cfg.monitors)
+
+    def other(self, i, title, cls, size=(800, 600), transient=False):
+        return Window(str(i), title, cls, i, Rect(0, 0, *size), transient=transient)
+
+    def test_match_takes_first_unless_stack(self):
+        wins = [self.other(1, "a.py - Visual Studio Code", "code"), self.other(2, "b.py - Visual Studio Code", "code")]
+        plan = make_plan(self.cfg, self.prof({"center:1": {"match": "code"}}), wins, self.mons)
+        self.assertEqual([p.window.id for p in plan.extra], ["1"])
+        plan = make_plan(self.cfg, self.prof({"center:1": {"match": "code", "stack": True}}), wins, self.mons)
+        self.assertEqual([p.window.id for p in plan.extra], ["1", "2"])
+        self.assertEqual(plan.extra[0].rect, plan.extra[1].rect)
+        self.assertEqual(plan.blocked[0]["windows"], [w.caption for w in wins])
+        # equally sized window stacks: first window is on top (raised last)
+        self.assertEqual(plan.raise_order(), ["2", "1"])
+
+    def test_dialogs_and_eve_windows_are_never_taken(self):
+        wins = [self.other(1, "Save as – code", "code", transient=True), self.win(2, "EVE"),
+                self.other(3, "code", "code")]
+        plan = make_plan(self.cfg, self.prof({"center:1": {"match": "code|eve", "stack": True}}), wins, self.mons)
+        self.assertEqual([p.window.id for p in plan.extra], ["3"])
+
+    def test_catch_all_only_new_windows_rest_after_match(self):
+        prof = self.prof({"center:1": {"match": "code"},
+                          "center:3": {"catch_all": True, "resize": False, "exclude": "dolphin"}})
+        wins = [self.other(1, "code", "code"), self.other(2, "Error", "kdialog", (300, 120)),
+                self.other(3, "Home", "dolphin"), self.other(4, "old", "konsole")]
+        plan = make_plan(self.cfg, prof, wins, self.mons)          # without catch_ids: catch nothing
+        self.assertEqual([p.window.id for p in plan.extra], ["1"])
+        plan = make_plan(self.cfg, prof, wins, self.mons, catch_ids={"1", "2", "3"})
+        self.assertEqual(sorted((p.window.id, p.slot) for p in plan.extra), [("1", 1), ("2", 3)])
+        self.assertEqual(plan.caught, ["2"])
+        cell = plan.layouts["center"].rect(3)
+        r = next(p.rect for p in plan.extra if p.window.id == "2")
+        self.assertEqual((r.w, r.h), (300, 120))                   # resize: false -> size stays
+        self.assertEqual((r.x + r.w // 2, r.y + r.h // 2), (cell.x + cell.w // 2, cell.y + cell.h // 2))
+
+    def test_catch_all_ignores_own_app_window(self):
+        prof = self.prof({"center:3": {"catch_all": True}})
+        wins = [self.other(1, "FleetCommander", "fcwm"), self.other(2, "Konsole", "konsole")]
+        plan = make_plan(self.cfg, prof, wins, self.mons, catch_ids={"1", "2"})
+        self.assertEqual([p.window.id for p in plan.extra], ["2"])
+
+    def test_window_zone_roundtrip(self):
+        from fcwm.config import model_to_raw, profile_to_model
+        blocked = {"center:1": {"label": "Code", "match": "code", "stack": True},
+                   "center:3": {"label": "Neu", "catch_all": True, "resize": False, "exclude": "dolphin"}}
+        prof = self.prof(blocked)
+        self.assertTrue(prof.blocked[1].catch_all and not prof.blocked[1].resize)
+        raw = model_to_raw(self.cfg, profile_to_model(self.cfg, prof))
+        self.assertEqual(raw["blocked"], blocked)
 
 
 class SubgridTest(PlanTest):
@@ -171,7 +231,7 @@ class SubgridTest(PlanTest):
         wins = [self.win(i, f"EVE - Alt{i}") for i in range(1, 6)]
         plan = make_plan(self.cfg, self.prof(), wins, self.mons)
         got = {p.char: (p.slot, p.sub) for p in plan.placements}
-        # Slot 0 normal, Slot 1 in 4 kleine Zellen geteilt -> 5 Plätze
+        # Slot 0 normal, slot 1 split into 4 small cells -> 5 places
         self.assertEqual(got, {"Alt1": (0, None), "Alt2": (1, 0), "Alt3": (1, 1), "Alt4": (1, 2), "Alt5": (1, 3)})
         small = next(p.rect for p in plan.placements if p.char == "Alt2")
         self.assertEqual(small, Rect(2160 + 1920, 1354, 960, 1058))
@@ -185,7 +245,7 @@ class SubgridTest(PlanTest):
         got = {p.char: (p.slot, p.sub) for p in plan.placements}
         self.assertEqual(got["Scout"], (1, 3))
         self.assertEqual(got["Scout2"], (1, 3))
-        self.assertEqual(got["Alt"], (1, 1))           # 1.0 ist frei gehalten
+        self.assertEqual(got["Alt"], (1, 1))           # 1.0 is kept free
         self.assertEqual(plan.raise_order(), ["3", "2"])
 
     def test_subgrid_roundtrip(self):
@@ -207,7 +267,7 @@ class OverflowTest(PlanTest):
         wins = [self.win(i, f"EVE - Alt{i}") for i in range(1, 7)]
         plan = make_plan(self.cfg, prof, wins, self.mons)
         got = {p.char: p.slot for p in plan.placements}
-        # Slot 0 normal, 1 und 2 sind Überlauf -> nicht für normales Auffüllen
+        # Slot 0 normal, 1 and 2 are overflow -> not used for normal filling
         self.assertEqual(got, {"Alt1": 0, "Alt2": 1, "Alt3": 1, "Alt4": 2, "Alt5": 2, "Alt6": 2})
         self.assertEqual([(o["order"], o["max"], o["count"]) for o in plan.overflow], [(1, 2, 2), (2, None, 3)])
 
@@ -223,11 +283,11 @@ class SeparatorTest(unittest.TestCase):
     def test_lines_only_between_touching_windows(self):
         from fcwm.separators import compute_lines
         gap = 2
-        a = Rect(0, 0, 99, 100)          # links oben
-        b = Rect(101, 0, 99, 100)        # rechts daneben (Lücke 2)
-        c = Rect(0, 102, 200, 50)        # darunter über die volle Breite
-        d = Rect(500, 0, 50, 50)         # weit weg -> keine Linie
-        lines = compute_lines([a, b, c, d, Rect(0, 0, 99, 100)], gap)   # Duplikat (Stapel) zählt einmal
+        a = Rect(0, 0, 99, 100)          # top left
+        b = Rect(101, 0, 99, 100)        # right next to it (gap 2)
+        c = Rect(0, 102, 200, 50)        # below, across the full width
+        d = Rect(500, 0, 50, 50)         # far away -> no line
+        lines = compute_lines([a, b, c, d, Rect(0, 0, 99, 100)], gap)   # duplicate (stack) counts once
         self.assertEqual(lines, [[0, 100, 99, 2], [99, 0, 2, 100], [101, 100, 99, 2]])
         self.assertEqual(compute_lines([a, b], 0), [])
         from fcwm.separators import line_pairs
@@ -236,13 +296,13 @@ class SeparatorTest(unittest.TestCase):
 
 class StableFillTest(PlanTest):
     def test_existing_auto_client_keeps_its_slot(self):
-        # "Zed" sitzt schon auf left:2; ein neuer, alphabetisch früherer Client darf ihn nicht verdrängen
+        # "Zed" already sits on left:2; a new, alphabetically earlier client must not displace it
         zed = self.win(1, "EVE - Zed")
-        zed.geometry = Rect(0, 1920, 1080, 1920)          # = left:2 im 2x2-Raster
+        zed.geometry = Rect(0, 1920, 1080, 1920)          # = left:2 in the 2x2 grid
         new = self.win(2, "EVE - Aaron")
         plan = make_plan(self.cfg, "Solo-Mining", [zed, new], self.mons, keep_ids={"1"})
         got = {p.char: f"{p.monitor}:{p.slot}" for p in plan.placements}
-        # left:3 ist im Beispielprofil frei gehalten -> Aaron springt auf den nächsten freien Slot
+        # left:3 is kept free in the example profile -> Aaron jumps to the next free slot
         self.assertEqual(got, {"Zed": "left:2", "Aaron": "right:2"})
 
 

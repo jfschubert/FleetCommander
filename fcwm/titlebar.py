@@ -1,12 +1,12 @@
-"""Titelleisten der EVE-Clients ausblenden/einfärben – über KWin-Fensterregeln.
+"""Hide/color the title bars of EVE clients – via KWin window rules.
 
-KWin erlaubt Skripten nicht, das Farbschema eines Fensters zu setzen; Fensterregeln
-(Systemeinstellungen → Fensterverwaltung → Fensterregeln) können das. Wir pflegen dort
-ausschliesslich eigene Regeln mit dem Präfix "fcwm-" und lassen alle anderen unangetastet.
-Farben werden als kleine Farbschemata unter ~/.local/share/color-schemes/FCWM-<hex>.colors abgelegt.
+KWin does not allow scripts to set a window's color scheme; window rules
+(System Settings → Window Management → Window Rules) can. We maintain only our
+own rules there, with the prefix "fcwm-", and leave all others untouched.
+Colors are stored as small color schemes under ~/.local/share/color-schemes/FCWM-<hex>.colors.
 
-Geschrieben wird mit kwriteconfig6 (wie die Systemeinstellungen selbst), danach lädt KWin die
-Regeln per D-Bus neu.
+Writing is done with kwriteconfig6 (like System Settings itself), after which KWin reloads the
+rules via D-Bus.
 """
 from __future__ import annotations
 
@@ -24,12 +24,12 @@ log = logging.getLogger("fcwm")
 
 RULES_FILE = "kwinrulesrc"
 PREFIX = "fcwm-"
-LEGACY_PREFIXES = ("evewm-",)   # frühere Projektname – deren Regeln räumen wir mit auf
+LEGACY_PREFIXES = ("evewm-",)   # former project name – we clean up its rules too
 
 
 def _ours(rule_id: str) -> bool:
     return rule_id.startswith(PREFIX) or rule_id.startswith(LEGACY_PREFIXES)
-# alle Schlüssel, die wir in einer Regel setzen – zum sauberen Entfernen
+# all keys we set in a rule – for clean removal
 _KEYS = ["Description", "wmclass", "wmclassmatch", "wmclasscomplete", "title", "titlematch", "types",
          "decocolor", "decocolorrule", "noborder", "noborderrule"]
 _SCHEME_DIR = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "color-schemes"
@@ -56,7 +56,7 @@ def _hex(color: str) -> str | None:
 
 
 def _scheme(color: str) -> str:
-    """Erzeugt (falls nötig) ein Farbschema für die Titelleiste und liefert seinen Namen."""
+    """Creates (if needed) a color scheme for the title bar and returns its name."""
     h = _hex(color)
     name = f"FCWM-{h}"
     r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
@@ -75,12 +75,12 @@ def _scheme(color: str) -> str:
 
 
 def _js_regex(pattern: str) -> str:
-    # KWin (QRegularExpression/PCRE) versteht benannte Gruppen (?P<name>…) – unverändert übernehmen
+    # KWin (QRegularExpression/PCRE) understands named groups (?P<name>…) – pass through unchanged
     return pattern
 
 
 def desired_rules(cfg: Config) -> dict[str, dict[str, str]]:
-    """Regel-ID -> Schlüssel/Werte. Charakter-Regeln zuerst (KWin wendet die erste passende an)."""
+    """Rule ID -> keys/values. Character rules first (KWin applies the first matching one)."""
     tb = cfg.titlebar or {}
     cls = cfg.class_re.pattern if cfg.class_re else ""
     base = {"wmclass": cls, "wmclassmatch": "3" if cls else "0", "wmclasscomplete": "false", "types": "1"}
@@ -109,16 +109,16 @@ def desired_rules(cfg: Config) -> dict[str, dict[str, str]]:
 
 
 def apply_rules(cfg: Config) -> int:
-    """Synchronisiert unsere Regeln mit der Konfiguration. Rückgabe: Anzahl aktiver Regeln."""
+    """Syncs our rules with the configuration. Returns: number of active rules."""
     if not available():
-        log.warning("kwriteconfig6/kreadconfig6 nicht gefunden – Titelleisten werden nicht angepasst")
+        log.warning("kwriteconfig6/kreadconfig6 not found – title bars are left unchanged")
         return 0
     return _write_rules(desired_rules(cfg))
 
 
 def remove_rules() -> int:
-    """Alle eigenen Regeln (fcwm-*) und Farbschemata entfernen – für `fcwm cleanup`.
-    Rückgabe: Anzahl entfernter Regeln."""
+    """Remove all own rules (fcwm-*) and color schemes – for `fcwm cleanup`.
+    Returns: number of removed rules."""
     removed = 0
     if available():
         removed = sum(1 for r in _read("General", "rules").split(",") if _ours(r))
@@ -138,11 +138,11 @@ def _write_rules(rules: dict[str, dict[str, str]]) -> int:
     for rid, kv in rules.items():
         for k, v in kv.items():
             _write(rid, k, v)
-    order = list(rules) + others          # unsere Regeln zuerst
+    order = list(rules) + others          # our rules first
     if order:
         _write("General", "rules", ",".join(order))
         _write("General", "count", str(len(order)))
-    else:                                  # so wie die Systemeinstellungen eine leere Liste schreiben
+    else:                                  # the way System Settings writes an empty list
         _write("General", "rules", "")
         _write("General", "count", None)
     subprocess.run(["busctl", "--user", "call", "org.kde.KWin", "/KWin", "org.kde.KWin", "reconfigure"],
@@ -151,7 +151,7 @@ def _write_rules(rules: dict[str, dict[str, str]]) -> int:
 
 
 def sync(cfg: Config) -> None:
-    """Regeln nur anfassen, wenn wir welche wollen oder noch alte von uns existieren."""
+    """Only touch rules if we want some or old ones of ours still exist."""
     if not available():
         return
     ours = [r for r in _read("General", "rules").split(",") if _ours(r)]

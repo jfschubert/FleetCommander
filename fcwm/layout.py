@@ -1,16 +1,17 @@
-"""Verknüpft Konfiguration, Monitore und Fenster zu einem Platzierungsplan.
+"""Combines configuration, monitors and windows into a placement plan.
 
-Ein Platz wird über (Monitor, Slot, Sub) adressiert: Sub ist None für eine normale Rasterzelle
-und die Zellnummer, wenn der Slot ein eigenes Subgrid hat ("center:1.3").
+A spot is addressed by (monitor, slot, sub): sub is None for a normal grid cell
+and the cell number if the slot has its own subgrid ("center:1.3").
 """
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
 
+from .appwindow import APP_ID
 from .backends.base import Placement, Window
 from .config import Config, Profile, parse_slot, slot_text
-from .geometry import GridSpec, Rect, grid_cells, span_cells, strip_decoration
+from .geometry import GridSpec, Rect, center_in, grid_cells, span_cells, strip_decoration
 from .i18n import t
 from .monitors import Monitor
 
@@ -21,7 +22,7 @@ Key = tuple[str, int, "int | None"]   # (monitor, slot, sub)
 class MonitorLayout:
     alias: str
     monitor: Monitor
-    area: Rect           # nutzbare Fläche nach Panel-Abzug und Padding
+    area: Rect           # usable area after panel deduction and padding
     grid: GridSpec
     cells: list[Rect]
     subgrids: dict[int, tuple[GridSpec, list[Rect]]] = field(default_factory=dict)
@@ -35,7 +36,7 @@ class MonitorLayout:
         return span_cells(cells, grid, sub)
 
     def keys(self) -> list[Key]:
-        """Alle belegbaren Plätze in Lesereihenfolge; ein Slot mit Subgrid wird durch seine Zellen ersetzt."""
+        """All assignable spots in reading order; a slot with a subgrid is replaced by its cells."""
         out: list[Key] = []
         for i in range(self.grid.slot_count):
             if i in self.subgrids:
@@ -58,23 +59,26 @@ class Plan:
     profile: str
     layouts: dict[str, MonitorLayout]
     placements: list[Placement] = field(default_factory=list)
-    missing: list[str] = field(default_factory=list)     # im Profil, aber kein Fenster offen
-    reserved: list[dict] = field(default_factory=list)   # Slots dieser fehlenden Charaktere
-    disabled: list[str] = field(default_factory=list)    # im Profil abgeschaltete Monitore
-    blocked: list[dict] = field(default_factory=list)    # freigehaltene Felder
-    overflow: list[dict] = field(default_factory=list)   # Überlauf-Felder (Reihenfolge, max, Belegung)
-    stack_previews: list[dict] = field(default_factory=list)  # Vorschau-Leisten auf Stapeln
-    extra: list[Placement] = field(default_factory=list) # andere Fenster (Browser, RIFT) in freigehaltenen Feldern
-    unplaced: list[str] = field(default_factory=list)    # Fenster offen, aber kein Slot frei
+    missing: list[str] = field(default_factory=list)     # in the profile, but no window open
+    reserved: list[dict] = field(default_factory=list)   # slots of these missing characters
+    disabled: list[str] = field(default_factory=list)    # monitors disabled in the profile
+    blocked: list[dict] = field(default_factory=list)    # reserved cells
+    overflow: list[dict] = field(default_factory=list)   # overflow cells (order, max, occupancy)
+    stack_previews: list[dict] = field(default_factory=list)  # preview strips on stacks
+    extra: list[Placement] = field(default_factory=list) # other windows (browser, RIFT) in reserved cells
+    unplaced: list[str] = field(default_factory=list)    # window open, but no slot free
+    caught: list[str] = field(default_factory=list)      # window IDs taken by the catch-all cell
     warnings: list[str] = field(default_factory=list)
     focus: Window | None = None
 
     def raise_order(self, only_ids: set[str] | None = None) -> list[str]:
-        """Fenster-IDs in der Reihenfolge, in der sie nach vorn geholt werden müssen, damit in
-        jedem Stapel (mehrere Clients auf demselben Platz) der erste Eintrag oben liegt."""
-        stacks: dict[Key, list[Placement]] = {}
+        """Window IDs in the order in which they must be raised so that in
+        each stack (several clients on the same spot) the first entry is on top."""
+        stacks: dict[tuple, list[Placement]] = {}
         for p in self.placements:
             stacks.setdefault((p.monitor, p.slot, p.sub), []).append(p)
+        for p in self.extra:      # window stacks in reserved cells (only equal-sized)
+            stacks.setdefault(("extra", p.monitor, p.slot, p.sub, *p.rect.as_list()), []).append(p)
         order = []
         for members in stacks.values():
             if len(members) > 1:
@@ -91,12 +95,14 @@ class Plan:
                                for p in self.placements],
                 "missing": self.missing, "reserved": self.reserved, "disabled": self.disabled,
                 "blocked": self.blocked, "overflow": self.overflow, "stack_previews": self.stack_previews,
+                "extra": [{"window": p.window.to_dict(), "monitor": p.monitor, "slot": p.slot, "sub": p.sub,
+                           "rect": p.rect.as_list()} for p in self.extra],
                 "unplaced": self.unplaced, "warnings": self.warnings,
                 "focus": self.focus.caption if self.focus else None}
 
 
 def char_of(cfg: Config, w: Window) -> str | None:
-    """Charaktername, wenn `w` ein eingeloggter EVE-Client ist, sonst None."""
+    """Character name if `w` is a logged-in EVE client, otherwise None."""
     if cfg.class_re and not cfg.class_re.search(w.resource_class or ""):
         return None
     m = cfg.caption_re.search(w.caption)
@@ -105,8 +111,15 @@ def char_of(cfg: Config, w: Window) -> str | None:
     return (m.groupdict().get("char") or w.caption).strip() or None
 
 
+def eve_like(cfg: Config, w: Window) -> bool:
+    """EVE window, even before login (title just "EVE") – never ends up in a window cell."""
+    if cfg.class_re:
+        return bool(cfg.class_re.search(w.resource_class or ""))
+    return bool(cfg.caption_re.search(w.caption)) or w.caption.strip() == "EVE"
+
+
 def eve_windows(cfg: Config, windows: list[Window]) -> dict[str, Window]:
-    """Filtert EVE-Clients und liefert {charaktername: fenster}."""
+    """Filters EVE clients and returns {character name: window}."""
     found: dict[str, Window] = {}
     for w in windows:
         char = char_of(cfg, w)
@@ -153,10 +166,14 @@ def build_layouts(cfg: Config, profile: Profile, monitors: dict[str, Monitor]) -
 
 
 def make_plan(cfg: Config, profile_name: str | Profile, windows: list[Window], detected: list[Monitor],
-              frame_geometry: bool = True, keep_ids: set[str] | None = None) -> Plan:
-    """keep_ids: Fenster, die nicht verschoben werden sollen. Sitzen sie bereits auf einem
-    freien fill-Slot, behalten sie ihn – so rutscht beim Einloggen eines weiteren Clients
-    niemand nach (die alphabetische Reihenfolge gilt nur für wirklich freie Plätze)."""
+              frame_geometry: bool = True, keep_ids: set[str] | None = None,
+              catch_ids: set[str] | None = None) -> Plan:
+    """keep_ids: windows that must not be moved. If they already sit on a
+    free fill slot, they keep it – so nobody shifts when another client logs in
+    (alphabetical order only applies to truly free spots).
+
+    catch_ids: windows that a catch-all cell (catch_all) may take – newly opened or
+    already caught ones. Existing windows are thus never swept up unasked."""
     profile = profile_name if isinstance(profile_name, Profile) else cfg.profiles[profile_name]
     profile_name = profile.name
     monitors, warnings = resolve_monitors(cfg, detected)
@@ -177,7 +194,7 @@ def make_plan(cfg: Config, profile_name: str | Profile, windows: list[Window], d
 
     def occupy(alias: str, slot: int, sub: int | None, span) -> Rect:
         lay = layouts[alias]
-        rect = lay.rect(slot, sub, span)  # validiert Slot/Sub/Span
+        rect = lay.rect(slot, sub, span)  # validates slot/sub/span
         if sub is not None:
             used.add((alias, slot, sub))
             return rect
@@ -185,7 +202,7 @@ def make_plan(cfg: Config, profile_name: str | Profile, windows: list[Window], d
             for c in range(span[0]):
                 s_ = slot + r * lay.grid.cols + c
                 used.add((alias, s_, None))
-                if s_ in lay.subgrids:                     # ganze Zelle belegt -> auch ihr Subgrid
+                if s_ in lay.subgrids:                     # whole cell occupied -> its subgrid too
                     used.update((alias, s_, j) for j in range(lay.subgrids[s_][0].slot_count))
         return rect
 
@@ -199,10 +216,9 @@ def make_plan(cfg: Config, profile_name: str | Profile, windows: list[Window], d
                                          char, alias, slot, tuple(span), auto, sub))
         placed.add(char)
 
-    # 0) freigehaltene Felder: nie für EVE-Clients; optional ein anderes Fenster dort platzieren
+    # 0) reserved cells: never for EVE clients; optionally place other windows there
     blocked: set[Key] = set()
-    eve_ids = {w.id for w in clients.values()}
-    taken_extra: set[str] = set()
+    cells: list[tuple] = []       # (BlockedCell, Key, Rect) of the valid cells
     for b in profile.blocked:
         lay = layouts.get(b.monitor)
         if not lay:
@@ -216,22 +232,49 @@ def make_plan(cfg: Config, profile_name: str | Profile, windows: list[Window], d
         used.add(key)
         if b.sub is None and b.slot in lay.subgrids:
             used.update((b.monitor, b.slot, j) for j in range(lay.subgrids[b.slot][0].slot_count))
-        win = None
+        cells.append((b, key, rect))
+
+    taken_extra: set[str] = set()
+
+    def candidate(w: Window) -> bool:
+        # Dialogs/popups (transient) open where the program wants them
+        return (w.id not in taken_extra and not w.transient and not eve_like(cfg, w)
+                and not w.caption.startswith("fcwm-") and w.resource_class != APP_ID)
+
+    def hit(rx: re.Pattern, w: Window) -> bool:
+        return bool(rx.search(w.caption) or rx.search(w.resource_class or ""))
+
+    found: dict[Key, list[Window]] = {}
+    for b, key, _ in cells:       # cells with a pattern first – the catch-all cell only gets the rest
         if b.match:
             rx = re.compile(b.match, re.IGNORECASE)
-            win = next((w for w in windows if w.id not in eve_ids and w.id not in taken_extra
-                        and (rx.search(w.caption) or rx.search(w.resource_class or ""))), None)
-        if win:
-            taken_extra.add(win.id)
-            name = b.label or win.caption
-            plan.extra.append(Placement(win, final(rect), f"{name}@{label(*key)}", name,
+            wins = [w for w in windows if candidate(w) and hit(rx, w)]
+            found[key] = wins if b.stack else wins[:1]
+            taken_extra.update(w.id for w in found[key])
+    catch = next((c for c in cells if c[0].catch_all), None)
+    if catch and catch_ids:
+        b, key, _ = catch
+        ex = re.compile(b.exclude, re.IGNORECASE) if b.exclude else None
+        wins = [w for w in windows if w.id in catch_ids and candidate(w) and not (ex and hit(ex, w))]
+        found[key] = found.get(key, []) + wins
+        taken_extra.update(w.id for w in wins)
+        plan.caught = [w.id for w in wins]
+
+    for b, key, rect in cells:
+        wins = found.get(key, [])
+        for w in wins:
+            name = w.caption if len(wins) > 1 or not b.label else b.label
+            target = final(rect) if b.resize else center_in(final(rect), w.geometry)
+            plan.extra.append(Placement(w, target, f"{name}@{label(*key)}", name,
                                         b.monitor, b.slot, (1, 1), False, b.sub))
         plan.blocked.append({"monitor": b.monitor, "slot": b.slot, "sub": b.sub, "label": b.label,
                              "match": b.match, "preview": b.preview, "preview_show": b.preview_show,
-                             "rect": rect.as_list(),
-                             "window": win.caption if win else None})
+                             "stack": b.stack, "catch_all": b.catch_all, "resize": b.resize,
+                             "exclude": b.exclude, "rect": rect.as_list(),
+                             "window": wins[0].caption if wins else None,
+                             "windows": [w.caption for w in wins]})
 
-    # 1) feste Zuweisungen aus dem Profil
+    # 1) fixed assignments from the profile
     for a in profile.assign:
         char = lookup.get(a.char.casefold())
         if a.monitor not in layouts:
@@ -241,7 +284,7 @@ def make_plan(cfg: Config, profile_name: str | Profile, windows: list[Window], d
         try:
             if char is None:
                 plan.missing.append(a.char)
-                # Platz trotzdem reservieren, damit "fill" ihn nicht belegt
+                # reserve the spot anyway so that "fill" does not occupy it
                 rect = occupy(a.monitor, a.slot, a.sub, a.span)
                 plan.reserved.append({"char": a.char, "monitor": a.monitor, "slot": a.slot, "sub": a.sub,
                                       "span": list(a.span), "rect": rect.as_list()})
@@ -252,7 +295,7 @@ def make_plan(cfg: Config, profile_name: str | Profile, windows: list[Window], d
         except ValueError as e:
             plan.warnings.append(f"{a.char}: {e}")
 
-    # Überlauf-Felder bestimmen: nehmen erst Clients auf, wenn alle Auffüll-Felder belegt sind
+    # Determine overflow cells: they only take clients once all fill cells are occupied
     ofl: list[tuple[Key, int | None]] = []
     for o in profile.overflow:
         lay = layouts.get(o.monitor)
@@ -266,7 +309,7 @@ def make_plan(cfg: Config, profile_name: str | Profile, windows: list[Window], d
         ofl.append((key, o.max))
     ofl_keys = {k for k, _ in ofl}
 
-    # 2) übrige Clients (alphabetisch) in freie Plätze der fill-Monitore
+    # 2) remaining clients (alphabetical) into free spots on the fill monitors
     fill_keys = [k for alias in profile.fill if alias in layouts for k in layouts[alias].keys()
                  if k not in ofl_keys]
     free = [k for k in fill_keys if k not in used]
@@ -287,7 +330,7 @@ def make_plan(cfg: Config, profile_name: str | Profile, windows: list[Window], d
             continue
         add(char, *free.pop(0), auto=True)
 
-    # 3a) Überlauf-Felder der Reihe nach füllen; das letzte nimmt alle übrigen auf
+    # 3a) fill overflow cells in order; the last one takes all the rest
     if ofl and plan.unplaced:
         count = {k: sum(1 for p in plan.placements if (p.monitor, p.slot, p.sub) == k) for k, _ in ofl}
         rest = []
@@ -307,7 +350,7 @@ def make_plan(cfg: Config, profile_name: str | Profile, windows: list[Window], d
                               "count": sum(1 for p in plan.placements if (p.monitor, p.slot, p.sub) == k),
                               "rect": layouts[k[0]].rect(k[1], k[2]).as_list()})
 
-    # 3b) ohne Überlauf-Felder: was übrig ist, reihum auf die fill-Plätze stapeln
+    # 3b) without overflow cells: stack what is left round-robin on the fill spots
     if profile.stack_overflow and plan.unplaced:
         targets = [k for k in fill_keys if k not in blocked]
         if targets:
@@ -315,7 +358,7 @@ def make_plan(cfg: Config, profile_name: str | Profile, windows: list[Window], d
                 add(char, *targets[n % len(targets)], auto=True, mark=False)
             plan.unplaced = []
 
-    # Vorschau-Leisten auf Stapeln: Streifen an einer Kante der Zelle
+    # preview strips on stacks: strip along one edge of the cell
     for key, sp in profile.stack_previews.items():
         mon, _, slot_txt = key.partition(":")
         if mon not in layouts:

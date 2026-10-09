@@ -1,11 +1,11 @@
-"""KWin-Backend (Plasma 6, Wayland *und* X11).
+"""KWin backend (Plasma 6, Wayland *and* X11).
 
-Funktionsweise: Python erzeugt ein kleines KWin-JavaScript, lädt es per D-Bus
-(org.kde.KWin /Scripting), führt es aus und entlädt es wieder. Rückgabewerte
-schreibt das Skript mit print() ins systemd-Journal; wir lesen sie dort mit
-einem eindeutigen Marker wieder aus.
+How it works: Python generates a small KWin JavaScript, loads it via D-Bus
+(org.kde.KWin /Scripting), runs it and unloads it again. The script writes
+return values with print() to the systemd journal; we read them back there using
+a unique marker.
 
-D-Bus-Aufrufe laufen über `busctl` (systemd) – Qt-Tools wie qdbus sind nicht nötig.
+D-Bus calls go through `busctl` (systemd) – Qt tools such as qdbus are not needed.
 """
 from __future__ import annotations
 
@@ -35,6 +35,10 @@ function _out(w) {
     if (w.output) return w.output.name;
     return null;
 }
+// Dialog/popup of another window (stays where the program opens it)
+function _tr(w) {
+    return !!(w.transient || w.modal);
+}
 """
 
 _JS_QUERY = r"""
@@ -43,7 +47,7 @@ _windows().forEach(function (w) {
     var g = w.frameGeometry;
     print(M + "W " + JSON.stringify({
         id: w.internalId.toString(), caption: w.caption, cls: w.resourceClass,
-        pid: w.pid, g: [g.x, g.y, g.width, g.height], out: _out(w)
+        pid: w.pid, g: [g.x, g.y, g.width, g.height], out: _out(w), tr: _tr(w)
     }));
 });
 if (workspace.screens) {
@@ -52,7 +56,8 @@ if (workspace.screens) {
         var g = s.geometry;
         print(M + "S " + JSON.stringify({
             name: s.name, geo: [g.x, g.y, g.width, g.height],
-            work: [a.x, a.y, a.width, a.height], scale: s.devicePixelRatio
+            work: [a.x, a.y, a.width, a.height], scale: s.devicePixelRatio,
+            manufacturer: s.manufacturer || "", model: s.model || "", serial: s.serialNumber || ""
         }));
     });
 }
@@ -85,13 +90,13 @@ print(M + "END");
 """
 
 
-# Bleibt geladen und meldet neue/umbenannte/geschlossene Fenster sofort ins Journal.
+# Stays loaded and reports new/renamed/closed windows to the journal immediately.
 _JS_LISTEN = r"""
 function info(w) {
     var g = w.frameGeometry;
     return JSON.stringify({
         id: w.internalId.toString(), caption: w.caption, cls: w.resourceClass,
-        pid: w.pid, g: [g.x, g.y, g.width, g.height], out: _out(w)
+        pid: w.pid, g: [g.x, g.y, g.width, g.height], out: _out(w), tr: _tr(w)
     });
 }
 function hook(w) {
@@ -109,7 +114,7 @@ _windows().forEach(hook);
 });
 print(M + "ready");
 """
-# Steuerung im selben Skript: globale Kurzbefehle, Stapel durchschalten, Fenster fixieren.
+# Control in the same script: global shortcuts, cycling stacks, pinning windows.
 # CTRL = {caption, cls, hotkeys: [{name, title, keys, action, rect?}], locks: [{id, r}]}
 _JS_CONTROL = r"""
 var EVE_CAP = new RegExp(CTRL.caption), EVE_CLS = CTRL.cls ? new RegExp(CTRL.cls) : null;
@@ -123,17 +128,20 @@ function activate(w) {
     if (workspace.raiseWindow) workspace.raiseWindow(w);
     if ("activeWindow" in workspace) workspace.activeWindow = w; else workspace.activeClient = w;
 }
-// Stapel durchschalten: den untersten Client des Stapels nach oben holen -> reihum alle
-function cycle(rect) {
+// Cycle stacks: bring the bottom window of the stack to the top -> all in turn.
+// Stacks of EVE clients or of other windows (reserved areas); `eve` = which kind.
+function cycle(rect, eve) {
     var order = workspace.stackingOrder || _windows();
-    var members = order.filter(function (w) { return isEve(w) && !w.minimized && sameRect(w.frameGeometry, rect); });
+    var members = order.filter(function (w) {
+        return w.normalWindow && !w.minimized && (eve === undefined || isEve(w) === eve) && sameRect(w.frameGeometry, rect);
+    });
     if (members.length) activate(members[0]);
 }
 CTRL.hotkeys.forEach(function (h) {
     registerShortcut(h.name, h.title, h.keys, function () {
         if (h.action == "cycle-active") {
             var a = workspace.activeWindow || workspace.activeClient;
-            if (isEve(a)) { var g = a.frameGeometry; cycle([g.x, g.y, g.width, g.height]); }
+            if (a && a.normalWindow) { var g = a.frameGeometry; cycle([g.x, g.y, g.width, g.height], isEve(a)); }
         } else if (h.action == "cycle-rect") {
             cycle(h.rect);
         } else {
@@ -141,7 +149,7 @@ CTRL.hotkeys.forEach(function (h) {
         }
     });
 });
-// Fixieren: nach Verschieben/Grössenänderung/Maximieren/Kacheln sofort zurück an den Platz
+// Pinning: after move/resize/maximize/tiling, immediately back to its place
 var LOCK = {};
 CTRL.locks.forEach(function (l) { LOCK[l.id] = l.r; });
 function restore(w) {
@@ -165,13 +173,13 @@ log = logging.getLogger("fcwm")
 
 def _window_from(d: dict) -> Window:
     return Window(d["id"], d["caption"], d["cls"], int(d["pid"]),
-                  Rect(*(round(v) for v in d["g"])), d.get("out"))
+                  Rect(*(round(v) for v in d["g"])), d.get("out"), bool(d.get("tr")))
 
 
-# Nicht über /Scripting/Script<id> starten: KWin vergibt die ID als "Anzahl geladener Skripte".
-# Sobald ein zweites Skript dauerhaft geladen ist (Trennlinien) und Skripte neu geladen werden,
-# kann eine neue ID mit einer bestehenden zusammenfallen – "run" träfe dann das falsche Skript und
-# das neue liefe nie. Scripting.start() startet zuverlässig alle geladenen, noch nicht laufenden Skripte.
+# Don't start via /Scripting/Script<id>: KWin assigns the ID as "number of loaded scripts".
+# Once a second script is kept loaded (separators) and scripts get reloaded,
+# a new ID can collide with an existing one – "run" would then hit the wrong script and
+# the new one would never run. Scripting.start() reliably starts all loaded, not yet running scripts.
 SCRIPT_LOCK = threading.Lock()
 
 
@@ -180,7 +188,7 @@ def start_loaded_scripts() -> None:
 
 
 def _stale_shortcuts() -> set[str]:
-    """Kurzbefehle früherer Läufe (fcwm-*, früher evewm-*), die noch in kglobalaccel registriert sind."""
+    """Shortcuts from earlier runs (fcwm-*, formerly evewm-*) still registered in kglobalaccel."""
     r = subprocess.run(["busctl", "--user", "call", "org.kde.KWin", "/component/kwin",
                         "org.kde.kglobalaccel.Component", "shortcutNames"], capture_output=True, text=True)
     return set(re.findall(r'"((?:fcwm|evewm)-[^"]+)"', r.stdout))
@@ -209,7 +217,7 @@ class KWinBackend(Backend):
     def __init__(self, timeout: float = 3.0):
         self.timeout = timeout
 
-    # -- Skript-Ausführung --------------------------------------------------
+    # -- Script execution --------------------------------------------------
     @staticmethod
     def _load(body: str, consts: dict, marker: str, plugin: str) -> None:
         header = f"var M = {json.dumps(marker)};\n" + "".join(
@@ -222,7 +230,7 @@ class KWinBackend(Backend):
                 _busctl("/Scripting", "org.kde.kwin.Scripting", "loadScript", "ss", path, plugin)
                 start_loaded_scripts()
         finally:
-            os.unlink(path)  # KWin hat das Skript beim Starten bereits eingelesen
+            os.unlink(path)  # KWin has already read the script on startup
 
     @staticmethod
     def _unload(plugin: str) -> None:
@@ -265,7 +273,9 @@ class KWinBackend(Backend):
                 d = json.loads(payload)
                 mons.append(Monitor(d["name"], Rect(*(round(v) for v in d["geo"])),
                                     scale=float(d.get("scale") or 1),
-                                    workarea=Rect(*(round(v) for v in d["work"]))))
+                                    workarea=Rect(*(round(v) for v in d["work"])),
+                                    manufacturer=d.get("manufacturer", ""), model=d.get("model", ""),
+                                    serial=d.get("serial", "")))
         return wins, mons
 
     def list_windows(self) -> list[Window]:
@@ -284,17 +294,17 @@ class KWinBackend(Backend):
 
     def listen(self, on_event: Callable[[str, Window], None], stop: threading.Event,
                interval: float = 30.0, control=None) -> None:
-        """Ereignisgesteuert: ein dauerhaft geladenes KWin-Skript meldet Fenster-Signale,
-        wir folgen dem Journal mit `journalctl -f`. Alle `interval` Sekunden wird geprüft,
-        ob das Skript noch geladen ist (z. B. nach einem KWin-Neustart).
+        """Event-driven: a permanently loaded KWin script reports window signals,
+        and we follow the journal with `journalctl -f`. Every `interval` seconds we check
+        whether the script is still loaded (e.g. after a KWin restart).
 
-        `control` (optional) liefert Kurzbefehle/Fixierungen: control.consts() -> CTRL-Dict,
-        control.reload (Event) -> Skript mit neuen Werten neu laden, control.on_hotkey(action)."""
+        `control` (optional) provides shortcuts/pins: control.consts() -> CTRL dict,
+        control.reload (Event) -> reload the script with new values, control.on_hotkey(action)."""
         marker = f"FCWM_L{uuid.uuid4().hex[:10]}:"
         proc = subprocess.Popen(["journalctl", "--user", "-f", "-n", "0", "-o", "cat"],
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         try:
-            time.sleep(0.3)  # journalctl muss mitlesen, bevor das Skript "ready" meldet
+            time.sleep(0.3)  # journalctl must be reading before the script reports "ready"
             registered: list[str] = []
 
             def load():
@@ -303,7 +313,7 @@ class KWinBackend(Backend):
                 consts, body = {}, _JS_LISTEN
                 if control is not None:
                     ctrl = control.consts()
-                    # damit geänderte Tasten greifen: alte Einträge in kglobalaccel entfernen
+                    # so changed keys take effect: remove old entries in kglobalaccel
                     names = set(registered) | {h["name"] for h in ctrl["hotkeys"]} | _stale_shortcuts()
                     for name in names:
                         subprocess.run(["busctl", "--user", "call", "org.kde.kglobalaccel", "/kglobalaccel",
@@ -348,7 +358,7 @@ class KWinBackend(Backend):
                         load()
         finally:
             self._unload(LISTENER_PLUGIN)
-            for name in registered:   # Kurzbefehle freigeben, solange das Tool nicht läuft
+            for name in registered:   # release shortcuts while the tool is not running
                 subprocess.run(["busctl", "--user", "call", "org.kde.kglobalaccel", "/kglobalaccel",
                                 "org.kde.KGlobalAccel", "unregister", "ss", "kwin", name], capture_output=True)
             proc.terminate()
