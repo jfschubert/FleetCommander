@@ -5,6 +5,21 @@ title: Installation
 
 # Installation
 
+## Prebuilt packages
+
+Every [release on GitHub](https://github.com/jfschubert/FleetCommander/releases) comes with packages for
+Arch Linux (`.pkg.tar.zst`), Debian 13 / Ubuntu 25.04+ (`.deb`) and Fedora (`.rpm`), plus a Python wheel.
+The release notes list the install command for each, e.g.:
+
+```bash
+sudo pacman -U fcwm-<version>-1-any.pkg.tar.zst   # Arch
+sudo apt install ./fcwm_<version>_all.deb          # Debian / Ubuntu
+sudo dnf install fcwm-<version>-1.fc*.noarch.rpm   # Fedora
+```
+
+Then continue with `fcwm init` as described [below](#arch-linux). To build the package yourself instead,
+read on.
+
 ## Dependencies
 
 | What | Purpose | Arch | Debian/Ubuntu |
@@ -59,7 +74,7 @@ Your config in `~/.config/fcwm/` is kept.
 ## Other distributions
 
 Packages for **Debian/Ubuntu** and **Fedora/openSUSE** are being added under `packaging/` in the repository.
-See [`packaging/README`](https://github.com/jfschubert/FleetCommander/blob/main/packaging/README.md) there for the current state and build instructions.
+See [`packaging/README`](https://github.com/jfschubert/FleetCommander/blob/master/packaging/README.md) there for the current state and build instructions.
 
 Until then you can run fcwm straight from a checkout: install the dependencies from the table above and use
 `./fcwm.sh` (or `python3 -m fcwm`) from the repository root.

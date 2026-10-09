@@ -45,15 +45,17 @@ const config = {
     },
   },
 
+  clientModules: ['./src/clientModules/imageZoom.js'],
+
   presets: [
     [
       'classic',
       /** @type {import('@docusaurus/preset-classic').Options} */
       ({
         docs: {
-          routeBasePath: '/',
+          routeBasePath: '/docs',
           sidebarPath: './sidebars.js',
-          editUrl: `${REPO}/edit/main/website/`,
+          editUrl: `${REPO}/edit/master/website/`,
         },
         blog: false,
         theme: {customCss: './src/css/custom.css'},
@@ -80,9 +82,9 @@ const config = {
           {
             title: 'Docs',
             items: [
-              {label: 'Installation', to: '/installation'},
-              {label: 'Configuration', to: '/configuration'},
-              {label: 'Troubleshooting', to: '/troubleshooting'},
+              {label: 'Installation', to: '/docs/installation'},
+              {label: 'Configuration', to: '/docs/configuration'},
+              {label: 'Troubleshooting', to: '/docs/troubleshooting'},
             ],
           },
           {

@@ -1,0 +1,161 @@
+# Builds all packages and publishes them as a GitHub release.
+#
+#   Tag push "v1.2.3"  -> test, build Arch/Debian/Fedora packages + wheel/sdist, create the release
+#   Manual run         -> same builds, packages only as workflow artifacts (no release)
+#
+# Bump the version first with packaging/bump-version.sh – the check job fails if the tag and the
+# version in pyproject.toml, fcwm/__init__.py, the PKGBUILD, the RPM spec or debian/changelog differ.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install pyyaml
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Version consistency
+        id: version
+        run: |
+          v=$(sed -n 's/^version *= *"\([^"]*\)".*/\1/p' pyproject.toml | head -n1)
+          fail=0
+          check() { [ "$2" = "$v" ] || { echo "::error::$1 has version '$2', pyproject.toml has '$v'"; fail=1; }; }
+          check fcwm/__init__.py      "$(sed -n 's/^__version__ = "\(.*\)"/\1/p' fcwm/__init__.py)"
+          check packaging/arch/PKGBUILD "$(sed -n 's/^pkgver=//p' packaging/arch/PKGBUILD)"
+          check packaging/rpm/fcwm.spec "$(sed -n 's/.*%global fcwm_version \([^}]*\)}.*/\1/p' packaging/rpm/fcwm.spec)"
+          check packaging/debian/changelog "$(sed -n '1s/^fcwm (\([^)]*\)).*/\1/p' packaging/debian/changelog)"
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then check "tag ${GITHUB_REF_NAME}" "${GITHUB_REF_NAME#v}"; fi
+          [ $fail = 0 ] || exit 1
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+  python:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install build
+      - run: python -m build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python
+          path: dist/*
+
+  arch:
+    needs: check
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build dependencies
+        run: pacman -Syu --noconfirm --needed python python-yaml python-build python-installer python-wheel python-setuptools
+      - name: makepkg
+        # makepkg refuses to run as root; --nodeps: the runtime dependencies (KWin, PyQt6 …) are not
+        # needed for building and testing
+        run: |
+          useradd -m builder
+          chown -R builder: "$GITHUB_WORKSPACE"
+          cd packaging/arch
+          sudo -u builder makepkg --nodeps --noconfirm
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          cp ./*.pkg.tar.zst "$GITHUB_WORKSPACE/out/"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch
+          path: out/*
+
+  deb:
+    needs: check
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends dpkg-dev debhelper dh-python pybuild-plugin-pyproject \
+            python3-all python3-setuptools python3-wheel python3-yaml
+      - name: dpkg-buildpackage
+        run: OUT_DIR="$GITHUB_WORKSPACE/out" packaging/debian/build-deb.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb
+          path: out/*.deb
+
+  rpm:
+    needs: check
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build dependencies
+        run: |
+          dnf install -y rpm-build python3-devel pyproject-rpm-macros python3-setuptools python3-wheel \
+            python3-pip python3-pyyaml systemd-rpm-macros desktop-file-utils
+      - name: rpmbuild
+        run: RPM_TOPDIR="$GITHUB_WORKSPACE/rpmbuild" packaging/rpm/build-rpm.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm
+          path: rpmbuild/RPMS/noarch/*.rpm
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: [check, python, arch, deb, rpm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums and release notes
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          cd dist && sha256sum -- * > SHA256SUMS && cd ..
+          arch=$(cd dist && ls ./*.pkg.tar.zst | head -n1 | sed 's|^\./||')
+          deb=$(cd dist && ls ./*.deb | head -n1 | sed 's|^\./||')
+          rpm=$(cd dist && ls ./*.rpm | head -n1 | sed 's|^\./||')
+          url="https://github.com/$REPO/releases/download/v$VERSION"
+          cat > notes.md <<EOF
+          ## Install
+
+          | Distribution | Command |
+          | --- | --- |
+          | Arch Linux / Manjaro / EndeavourOS | \`sudo pacman -U $url/$arch\` |
+          | Debian 13 / Ubuntu 25.04+ / KDE neon | download, then \`sudo apt install ./$deb\` |
+          | Fedora 42+ | \`sudo dnf install $url/$rpm\` |
+          | anything else | \`pipx install $url/fcwm-$VERSION-py3-none-any.whl\` |
+
+          Then, as your user: \`fcwm init\` and \`systemctl --user enable --now fcwm\`.
+          Upgrading from an older version: \`fcwm restart\` after the install.
+
+          Documentation: https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO#*/}/docs/
+
+          EOF
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: FleetCommander ${{ needs.check.outputs.version }}
+          body_path: notes.md
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: dist/*

@@ -160,13 +160,14 @@
         <span class="ctl"><button class="wbtn" data-collapse><svg class="ic"><use href="#i-min"/></svg></button></span></div>
       <div class="body" style="display:grid;gap:8px">
         <label class="switch"><input type="checkbox" id="tbHide"><span class="track"></span><span class="lbl" data-i18n="tbHide"></span></label>
-        <div class="row"><span class="k" data-i18n="tbDefault"></span><span id="tbDefault" style="margin-left:auto"></span></div>
+        <!-- title bar colors: hidden while the feature is disabled (fcwm/titlebar.py COLORS_ENABLED) -->
+        <div class="row" style="display:none"><span class="k" data-i18n="tbDefault"></span><span id="tbDefault" style="margin-left:auto"></span></div>
         <div class="row"><span class="k"><span data-i18n="sepWidth"></span> <span class="info" data-tip="sepHint">i</span></span>
           <span class="stepper" style="margin-left:auto"><button data-sep="-">−</button><span id="sepWidth"></span><button data-sep="+">+</button></span></div>
         <div class="row"><span class="k" data-i18n="sepColor"></span><span id="sepColor" style="margin-left:auto"></span></div>
         <div class="row"><span class="k" data-i18n="pvShow"></span><select id="sepShow" style="margin-left:auto">
           <option value="always" data-i18n="sepAlways"></option><option value="eve" data-i18n="pvEve"></option></select></div>
-        <ul class="list" id="tbChars"></ul>
+        <ul class="list" id="tbChars" style="display:none"></ul>
       </div>
     </section>
   </div>

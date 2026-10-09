@@ -8,6 +8,8 @@ title: Kurzbefehle, Fixieren, Titelleisten
 Alles in der Web-UI einstellbar (meist auf der Seite **Einstellungen**). Benötigt KWin (Plasma) und läuft,
 solange `fcwm web` oder `fcwm watch` aktiv ist – ausser den Titelleisten, die auch ohne fcwm wirken.
 
+![Die Einstellungen-Seite](/img/screenshots/settings-de.png)
+
 ## Kurzbefehle {#hotkeys}
 
 ```yaml
@@ -47,14 +49,11 @@ Kurzbefehl, Auto-Platzierung) aktualisiert die Plätze.
 
 ```yaml
 settings:
-  titlebar: {hide: false, color: "#2a6f97"}
-characters:
-  "Alt 1": {color: "#b42828"}
+  titlebar: {hide: true}
 ```
 
-Titelleisten aller EVE-Clients ausblenden und/oder einfärben, zusätzlich eine Farbe pro Charakter. Umgesetzt
-über eigene KWin-Fensterregeln (`fcwm-…` in `~/.config/kwinrulesrc` – andere Regeln bleiben unberührt) und kleine
-Farbschemata unter `~/.local/share/color-schemes/FCWM-*.colors`. Wirkt auch, wenn fcwm nicht läuft.
+Titelleisten aller EVE-Clients ausblenden. Umgesetzt über eigene KWin-Fensterregeln (`fcwm-…` in
+`~/.config/kwinrulesrc` – andere Regeln bleiben unberührt). Wirkt auch, wenn fcwm nicht läuft.
 
 **Beim Aus-/Einblenden werden die Clients neu ausgerichtet** – ohne Titelleiste schrumpft sonst der Rahmen und
 oben bleibt eine Lücke.

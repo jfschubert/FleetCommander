@@ -1,21 +1,32 @@
 ---
 sidebar_position: 13
 title: Previews
+sidebar_label: Previews (experimental)
 ---
 
 # Live previews
+
+:::warning Experimental / work in progress
+
+Previews work, but they are still being developed: behavior, options and the config format may change,
+and there are rough edges (e.g. KWin keeps the preview windows on top). Feedback via
+[GitHub issues](https://github.com/jfschubert/FleetCommander/issues) is welcome.
+
+:::
 
 fcwm can show live images of your clients, like EVE-O Preview. They are rendered by KWin itself
 (`WindowThumbnail`) – no screen capture – and are only shown while `fcwm web` / `fcwm watch` runs.
 
 ## Preview slots
 
+![A preview slot (bottom right) in the Fleet-Fight profile](/img/screenshots/fleet-fight-en.png)
+
 A kept-free slot can become a preview slot (⚙ → Keep free / for other windows, then ⚙ → Edit (name, windows, preview) → "Preview"):
 
 - `preview: all` – all clients,
 - `preview: hidden` – only hidden clients (behind others in a stack, or minimized).
 
-The slot shows the clients as tiles with character names (in the title bar color); the active one is
+The slot shows the clients as tiles with character names; the active one is
 highlighted and a click switches to the client.
 
 **Visible** (`show`): `always` (default, like EVE-O Preview – then also on top of other programs) or `eve`

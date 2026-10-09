@@ -11,6 +11,8 @@ Start mit `fcwm web` (oder über den systemd-Dienst), dann <http://127.0.0.1:876
 
 Die Sprache (Deutsch/English) wird unter **Einstellungen → Allgemein** gewählt und im Browser gespeichert.
 
+![Der Layout-Editor mit drei Monitoren](/img/screenshots/layout-de.png)
+
 ## Programmfenster {#app-window}
 
 Lieber ohne Browser-Tab? `fcwm app` – oder einfach „FleetCommander“ im Anwendungsmenü – öffnet dieselbe Web-UI
@@ -34,7 +36,7 @@ Die Oberfläche hat drei Seiten:
 
 - **Layout** (Hauptseite): Profile, die Monitor-Vorschau mit allen Feldern, die Charakter-Palette, die
   Monitor-Karten, Anwenden, Auto-Platzierung und Fixieren.
-- **Einstellungen**: Sprache, globale Kurzbefehle, Titelleisten / Trennlinien / Charakterfarben, Debug-Infos
+- **Einstellungen**: Sprache, globale Kurzbefehle, Titelleisten / Trennlinien, Debug-Infos
   (Backend, Versionen, Clients, Monitore – mit Kopieren-Knopf für Fehlerberichte), die Konfigurationsdatei mit
   Knöpfen zum **Neu laden** und **Neu starten** sowie Adresse/Port der Web-UI (wirkt nach einem Neustart).
 - **Über**: Version, Links (Dokumentation, GitHub, Fehler melden, Lizenz), Mitwirkende, rechtlicher Hinweis – und
@@ -65,6 +67,8 @@ Längere Hilfetexte stecken hinter kleinen **i**-Symbolen – mit der Maus darü
 - Charaktere, die gerade nicht eingeloggt sind, lassen sich über **Charakter hinzufügen** einplanen.
 
 ## Das Feld-Menü (⚙) {#the-slot-menu}
+
+![Das ⚙-Menü eines Feldes](/img/screenshots/cell-menu-de.png)
 
 Jedes Feld hat einen Zahnrad-Knopf **⚙**, der sein Aktionsmenü öffnet. Welche Einträge erscheinen, hängt vom
 Feld ab.

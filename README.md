@@ -10,6 +10,8 @@ Profiles define which character goes into which slot. Control it from the CLI, a
 fcwm only arranges, switches and previews windows – it never sends input to clients (same category as
 EVE-O Preview). Tested with Plasma 6.7 / KWin 6.7 (Wayland).
 
+![FleetCommander layout editor](website/static/img/screenshots/layout-en.png)
+
 ## Features
 
 - **Per-monitor grids** with draggable grid lines, spans and nested **subgrids** for smaller clients
@@ -18,9 +20,15 @@ EVE-O Preview). Tested with Plasma 6.7 / KWin 6.7 (Wayland).
 - **Window zones**: keep slots free for a browser, RIFT, an editor … – stack matching windows there or
   catch every newly opened window in one slot
 - **Global hotkeys** for switching layouts and cycling stacks, **lock** windows in place
-- **Live previews** like EVE-O Preview, rendered by KWin (no screen capture)
-- Colored / hidden **title bars** per character and **separator lines** between clients
+- **Live previews** *(experimental)* like EVE-O Preview, rendered by KWin (no screen capture)
+- Hidden **title bars** and **separator lines** between clients
 - **Web UI** with a drag & drop profile editor (English / German)
+
+### Not just for EVE
+
+Window zones work with any window, so fcwm is also a general grid tiler for KDE Plasma. I use it at work to
+arrange my development environment: IDE, terminals, browser and chat each get a fixed spot, and a hotkey
+switches between layouts.
 
 ## Install (Arch Linux)
 
@@ -33,7 +41,7 @@ systemctl --user enable --now fcwm   # runs with your Plasma session
 ```
 
 Packages for other distributions: see [`packaging/README.md`](packaging/README.md).
-Dependencies, updating and uninstalling: [Installation](https://jfschubert.github.io/FleetCommander/installation/).
+Dependencies, updating and uninstalling: [Installation](https://jfschubert.github.io/FleetCommander/docs/installation/).
 
 ## Quick start
 
@@ -51,7 +59,7 @@ The full CLI and configuration reference, the web UI guide and more are in the
 
 Tests: `python3 -m unittest discover -s tests`
 
-Want to translate fcwm into your language? See [Translations](https://jfschubert.github.io/FleetCommander/translations/).
+Want to translate fcwm into your language? See [Translations](https://jfschubert.github.io/FleetCommander/docs/translations/).
 
 ## License
 

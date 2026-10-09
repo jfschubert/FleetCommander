@@ -1,0 +1,110 @@
+{
+  "home.f.grid.t": {
+    "message": "Raster pro Monitor"
+  },
+  "home.f.grid.d": {
+    "message": "Ziehbare Rasterlinien, Spans und verschachtelte Subgrids – Zeile 1 auf 50:50, Zeile 2 auf 75:25, ganz wie deine Bildschirme es brauchen."
+  },
+  "home.f.profiles.t": {
+    "message": "Profile & Stapel"
+  },
+  "home.f.profiles.d": {
+    "message": "Charaktere fest zuweisen, den Rest automatisch auffüllen, Clients auf einem Platz stapeln und Layouts per Kurzbefehl wechseln."
+  },
+  "home.f.auto.t": {
+    "message": "Auto-Platzierung"
+  },
+  "home.f.auto.d": {
+    "message": "Zehn Clients gleichzeitig einloggen – jeder landet in seinem Feld, sobald er erscheint."
+  },
+  "home.f.zones.t": {
+    "message": "Fensterzonen"
+  },
+  "home.f.zones.d": {
+    "message": "Felder für Browser, RIFT oder deinen Editor frei halten oder jedes neue Fenster an einem Ort auffangen."
+  },
+  "home.f.hotkeys.t": {
+    "message": "Globale Kurzbefehle"
+  },
+  "home.f.hotkeys.d": {
+    "message": "Nächstes/vorheriges Layout, aktiven Stapel durchschalten, ein Kurzbefehl pro Stapel – direkt in KWin registriert."
+  },
+  "home.f.previews.t": {
+    "message": "Live-Vorschauen"
+  },
+  "home.f.previews.d": {
+    "message": "Vorschaubilder wie EVE-O Preview, gerendert von KWin selbst – ohne Bildschirmaufnahme."
+  },
+  "home.f.titlebars.t": {
+    "message": "Titelleisten & Trennlinien"
+  },
+  "home.f.titlebars.d": {
+    "message": "Titelleisten ausblenden für mehr Spielfläche, feine Trennlinien nur dort, wo zwei Clients aneinanderstoßen."
+  },
+  "home.f.lock.t": {
+    "message": "Fixieren"
+  },
+  "home.f.lock.d": {
+    "message": "Fixierte Fenster springen zurück, wenn sie versehentlich verschoben, vergrößert oder maximiert werden."
+  },
+  "home.claim": {
+    "message": "Jeder Client an seinem Platz."
+  },
+  "home.lead": {
+    "message": "Ein Raster-Fenstermanager für EVE-Online-Multiboxing unter KDE Plasma – Wayland und X11. Profile, Stapel, Kurzbefehle und ein Drag-&-Drop-Editor im Browser."
+  },
+  "home.cta.start": {
+    "message": "Los geht's"
+  },
+  "home.cta.docs": {
+    "message": "Dokumentation"
+  },
+  "home.chip.input": {
+    "message": "Keine Eingaben an Clients"
+  },
+  "home.shot.alt": {
+    "message": "Der Layout-Editor von FleetCommander"
+  },
+  "home.features.title": {
+    "message": "Gebaut für Multiboxing"
+  },
+  "home.badge.experimental": {
+    "message": "experimentell"
+  },
+  "home.notjust.title": {
+    "message": "Nicht nur für EVE"
+  },
+  "home.notjust.p1": {
+    "message": "Fensterzonen funktionieren mit jedem Fenster – fcwm ist damit auch ein allgemeiner Raster-Fenstermanager für KDE Plasma."
+  },
+  "home.notjust.p2": {
+    "message": "Ich nutze es auch bei der Arbeit, um meine Entwicklungsumgebung anzuordnen: IDE, Terminals, Browser und Chat bekommen jeweils einen festen Platz, und ein Kurzbefehl wechselt zwischen den Layouts."
+  },
+  "home.notjust.link": {
+    "message": "Mehr über Fensterzonen →"
+  },
+  "home.shot2.alt": {
+    "message": "Das Feld-Menü mit den Optionen für Fensterzonen"
+  },
+  "home.install.title": {
+    "message": "In einer Minute startklar"
+  },
+  "home.install.p": {
+    "message": "Arch-Paket bauen, Startkonfiguration anlegen und den Benutzerdienst aktivieren. Pakete für Debian, Fedora und ein allgemeines Installationsskript sind ebenfalls dabei."
+  },
+  "home.install.link": {
+    "message": "Alle Installationswege →"
+  },
+  "home.fair.title": {
+    "message": "Nur Fenster, niemals Eingaben"
+  },
+  "home.fair.p": {
+    "message": "fcwm ordnet Fenster über den Fenstermanager des Desktops an, schaltet zwischen ihnen um und zeigt Vorschauen. Es liest keinen Spielspeicher und sendet nie Tastendrücke oder Klicks an Spiel-Clients – dieselbe Kategorie Werkzeug wie EVE-O Preview."
+  },
+  "home.meta.title": {
+    "message": "Fenstermanager für EVE Online unter KDE Plasma"
+  },
+  "home.meta.desc": {
+    "message": "FleetCommander ordnet EVE-Online-Clients (und jedes andere Fenster) in Rastern pro Monitor unter KDE Plasma an."
+  }
+}

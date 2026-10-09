@@ -1,0 +1,94 @@
+# Demo config for the documentation screenshots (website/screenshots/take.py) – placeholder
+# characters only, never real names.
+# FleetCommander – example configuration
+# Copy to ~/.config/fcwm/config.yaml (or config.yaml in the project folder).
+# JSON works too (same structure, .json file extension).
+
+settings:
+  backend: auto            # auto | kwin (Wayland + X11 unter Plasma) | x11 (wmctrl/xdotool)
+  language: de             # de | en – language of CLI/server messages (web UI: selector at top right)
+  web: {host: 127.0.0.1, port: 8765}   # Web UI address (fcwm web); restart after changing.
+                                       # Do not expose to the network: the API moves windows and writes the configuration.
+
+  # How EVE clients are detected. The group (?P<char>…) yields the character name.
+  match:
+    caption_regex: '^EVE - (?P<char>.+)$'
+    resource_class: '^steam_app_8500$'   # Steam/Proton EVE; leave empty for other launchers
+
+  gap: 0                   # Gap between grid cells in pixels
+
+  # Window decoration (title bar/frame). Only relevant for the x11 backend, which sets the
+  # client geometry – KWin sets the frame geometry, so nothing is subtracted there.
+  decoration: {top: 0, right: 0, bottom: 0, left: 0}
+
+  min_size: [1024, 768]    # Warn if a slot is smaller (EVE minimum)
+
+# Monitors get a freely chosen alias. Matched by connector name
+# (`fcwm monitors` lists them) or by `index:` (0 = leftmost).
+monitors:
+  left:
+    output: DP-5           # example (portrait) – `fcwm monitors` lists your connectors
+    grid: 2x2              # columns x rows – slots row by row: 0 1 / 2 3
+    reserve: auto          # Panel deduction: auto = KWin work area, or manual:
+                           #   reserve: {top: 0, right: 0, bottom: 44, left: 0}
+  center:
+    output: DP-1           # landscape, 3840x2160, the taskbar is here
+    grid: 1x1
+    reserve: auto
+    padding: 0             # additional inner margin (number or {top:…, …})
+  right:
+    output: DP-4           # portrait, 2160x3840
+    grid: 2x2
+    reserve: auto
+
+default_profile: Solo-Mining
+
+profiles:
+  Solo-Mining:
+    description: Main large in the middle, miners left and right
+    assign:
+      # Short form  "character": "monitor:slot"
+      "Caldari Citizen 1": center:0
+      "Gallente Citizen 2":   left:0
+      "Minmatar Citizen 3":  left:1
+      "Amarr Citizen 4": right:0
+      "Caldari Citizen 5":  right:1
+    fill: [left, right]    # further, unlisted clients go into free slots on these monitors
+    blocked:               # cells that are never filled with EVE clients
+      "right:3": {label: RIFT, match: "RIFT"}   # optional: place this window (title/class, regex) there
+      "left:3": Browser                          # just keep free
+    focus: Caldari Citizen 1  # activate this window at the end
+
+  Fleet-Fight:
+    description: FC in the middle, alts stacked on the sides
+    grids:                 # override the grid for this profile only
+      left: 1x3
+      right: 1x3
+    assign:
+      "Caldari Citizen 1": center:0
+      # Long form with span: slot 0 across 1 column x 2 rows
+      "Gallente Citizen 2": {monitor: left, slot: 0, span: [1, 2]}
+    fill: [left, right]
+    blocked:
+      "right:2": {label: Previews, preview: hidden}
+    focus: Caldari Citizen 1
+
+  Multibox-Center:
+    description: Everything on the main monitor, main twice as wide
+    grids:
+      center: {cols: 2, rows: 2, col_weights: [2, 1]}
+    assign:
+      "Caldari Citizen 1": {monitor: center, slot: 0, span: [1, 2]}
+    fill: [center, left, right]
+
+  Single-Monitor:
+    description: Single monitor – main on the left, alts stacked on the right
+    grids:
+      center: {cols: 2, rows: 1, col_weights: [2, 1]}
+    assign:
+      "Caldari Citizen 1": center:0
+      # Several characters on the same slot = stack (first entry is on top)
+      "Gallente Citizen 2": center:1
+      "Minmatar Citizen 3": center:1
+    fill: [center]         # stack further clients round-robin onto the center slots (default)
+    disabled_monitors: [left, right]   # do not use these monitors in this profile

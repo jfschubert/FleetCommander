@@ -7,7 +7,7 @@ title: Legal
 ## FleetCommander
 
 FleetCommander (`fcwm`) is free software, © 2026 Jan-Frederic Schubert, licensed under the
-[GNU General Public License v3.0 or later](https://github.com/jfschubert/FleetCommander/blob/main/LICENSE).
+[GNU General Public License v3.0 or later](https://github.com/jfschubert/FleetCommander/blob/master/LICENSE).
 The FleetCommander icon is original artwork of this project and licensed under the same terms.
 The interface icons come from [Lucide](https://lucide.dev) under the ISC License (a few Feather-derived
 icons additionally under MIT); the full license texts are in the NOTICE file.

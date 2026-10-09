@@ -63,3 +63,20 @@ npm run build           # statische Seite für beide Sprachen in website/build/
 Die deutschen Übersetzungen liegen in `website/i18n/de/`. Veröffentlicht wird die Seite über
 `.github/workflows/docs.yml` (GitHub Pages) bzw. `.gitlab-ci.yml` (GitLab Pages); `DOCS_URL` und
 `DOCS_BASE_URL` überschreiben Adresse und Basispfad der Seite.
+
+### Screenshots {#screenshots}
+
+Die Screenshots in der Doku und auf der Startseite stammen aus `website/screenshots/take.py`. Das Skript
+startet eine isolierte Web-UI mit der Demo-Konfiguration (nur Platzhalter-Charaktere) und rendert jede Seite
+offscreen auf Englisch und Deutsch (benötigt PyQt6-WebEngine):
+
+```bash
+python3 website/screenshots/take.py
+```
+
+## Releases {#releases}
+
+`packaging/bump-version.sh X.Y.Z "Changelog-Zeile"` setzt die Version überall, wo sie steht. Ein Push des
+Tags `vX.Y.Z` startet `.github/workflows/release.yml`: Tests, Versionsprüfung, die Pakete für Arch, Debian und
+Fedora sowie Wheel und Sdist und ein GitHub-Release mit allen Dateien und `SHA256SUMS`. Details:
+[`packaging/README.md`](https://github.com/jfschubert/FleetCommander/blob/master/packaging/README.md#releasing-a-new-version).

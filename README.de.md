@@ -10,6 +10,8 @@ Profile legen fest, welcher Charakter in welchem Slot landet. Steuerung per CLI,
 fcwm ordnet Fenster nur an, schaltet und zeigt Vorschauen – es sendet nie Eingaben an Clients (gleiche
 Kategorie wie EVE-O Preview). Getestet mit Plasma 6.7 / KWin 6.7 (Wayland).
 
+![FleetCommander Layout-Editor](website/static/img/screenshots/layout-de.png)
+
 ## Funktionen
 
 - **Raster pro Monitor** mit ziehbaren Rasterlinien, Spans und verschachtelten **Subgrids** für kleinere Clients
@@ -18,9 +20,15 @@ Kategorie wie EVE-O Preview). Getestet mit Plasma 6.7 / KWin 6.7 (Wayland).
 - **Fensterzonen**: Felder für Browser, RIFT, Editor … frei halten – passende Fenster dort stapeln oder
   jedes neu geöffnete Fenster in einem Feld auffangen
 - **Globale Kurzbefehle** zum Layout-Wechsel und Stapel-Durchschalten, Fenster **fixieren**
-- **Live-Vorschauen** wie EVE-O Preview, gerendert von KWin (ohne Bildschirmaufnahme)
-- Farbige / ausgeblendete **Titelleisten** pro Charakter und **Trennlinien** zwischen Clients
+- **Live-Vorschauen** *(experimentell)* wie EVE-O Preview, gerendert von KWin (ohne Bildschirmaufnahme)
+- Ausgeblendete **Titelleisten** und **Trennlinien** zwischen Clients
 - **Web-UI** mit Drag-&-Drop-Profil-Editor (Deutsch / Englisch)
+
+### Nicht nur für EVE
+
+Fensterzonen funktionieren mit jedem Fenster – fcwm ist damit auch ein allgemeiner Raster-Fenstermanager für
+KDE Plasma. Ich nutze es auch bei der Arbeit, um meine Entwicklungsumgebung anzuordnen: IDE, Terminals, Browser
+und Chat bekommen jeweils einen festen Platz, und ein Kurzbefehl wechselt zwischen den Layouts.
 
 ## Installation (Arch Linux)
 
@@ -33,7 +41,7 @@ systemctl --user enable --now fcwm   # läuft mit der Plasma-Sitzung
 ```
 
 Pakete für andere Distributionen: siehe [`packaging/README.md`](packaging/README.md).
-Abhängigkeiten, Aktualisieren und Deinstallieren: [Installation](https://jfschubert.github.io/FleetCommander/de/installation/).
+Abhängigkeiten, Aktualisieren und Deinstallieren: [Installation](https://jfschubert.github.io/FleetCommander/de/docs/installation/).
 
 ## Schnellstart
 
@@ -51,7 +59,7 @@ Die vollständige CLI- und Konfigurationsreferenz, die Anleitung zur Web-UI und 
 
 Tests: `python3 -m unittest discover -s tests`
 
-fcwm in deine Sprache übersetzen? Siehe [Übersetzungen](https://jfschubert.github.io/FleetCommander/de/translations/).
+fcwm in deine Sprache übersetzen? Siehe [Übersetzungen](https://jfschubert.github.io/FleetCommander/de/docs/translations/).
 
 ## Lizenz
 

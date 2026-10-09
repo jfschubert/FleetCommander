@@ -18,7 +18,6 @@ Top-level keys:
 | `default_profile` | Profile used when none is given. |
 | `profiles` | Named layouts. |
 | `hotkeys` | Global hotkeys (next/previous layout, cycle stack). |
-| `characters` | Per-character options (title bar color). |
 
 ## settings
 
@@ -33,7 +32,7 @@ settings:
   gap: 0                   # gap between grid cells in pixels
   decoration: {top: 0, right: 0, bottom: 0, left: 0}   # x11 backend only
   min_size: [1024, 768]    # warn when a slot is smaller (EVE minimum)
-  titlebar: {hide: false, color: "#2a6f97"}
+  titlebar: {hide: false}
   separator: {width: 2, color: "#3c3c3c", show: always}
 ```
 
@@ -48,7 +47,7 @@ settings:
 | `gap` | `0` | Gap between grid cells in pixels. |
 | `decoration` | `0` | Window decoration size. Only used by the `x11` backend, which sets the client geometry; KWin sets the frame geometry, so nothing is deducted there. |
 | `min_size` | `[1024, 768]` | Warn when a slot is smaller than this. |
-| `titlebar` | `{hide: false, color: ""}` | Hide and/or color the title bars of all EVE clients – see [Title bars](hotkeys-appearance.md#title-bars). |
+| `titlebar` | `{hide: false}` | Hide the title bars of all EVE clients – see [Title bars](hotkeys-appearance.md#title-bars). |
 | `separator` | `{width: 0}` | Separator line between clients: `width` (0–20 px), `color`, `show: always\|eve` – see [Separators](hotkeys-appearance.md#separators). |
 
 ### Web UI address
@@ -254,15 +253,6 @@ hotkeys:
 
 Qt key notation (e.g. `Meta+Ctrl+Right`). Profile hotkeys and stack hotkeys are set per profile (`hotkey`,
 `stack_hotkeys`). See [Hotkeys](hotkeys-appearance.md#hotkeys).
-
-## characters
-
-```yaml
-characters:
-  "Alt 1": {color: "#b42828"}
-```
-
-Per-character title bar color (also used for preview labels).
 
 ## Grid calculation
 

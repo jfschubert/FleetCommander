@@ -63,3 +63,20 @@ npm run build           # static site for both locales in website/build/
 German translations are in `website/i18n/de/`. The site is published by
 `.github/workflows/docs.yml` (GitHub Pages) or `.gitlab-ci.yml` (GitLab Pages); `DOCS_URL` and
 `DOCS_BASE_URL` override the site URL and base path.
+
+### Screenshots
+
+The screenshots in the docs and on the front page come from `website/screenshots/take.py`. It starts an
+isolated web UI with the demo config (placeholder characters only) and renders every page offscreen in
+English and German (needs PyQt6-WebEngine):
+
+```bash
+python3 website/screenshots/take.py
+```
+
+## Releases
+
+`packaging/bump-version.sh X.Y.Z "changelog line"` sets the version in every place it is recorded. Pushing
+the tag `vX.Y.Z` runs `.github/workflows/release.yml`: tests, a version check, the Arch, Debian and Fedora
+packages plus wheel and sdist, and a GitHub release with all files and `SHA256SUMS`. Details:
+[`packaging/README.md`](https://github.com/jfschubert/FleetCommander/blob/master/packaging/README.md#releasing-a-new-version).

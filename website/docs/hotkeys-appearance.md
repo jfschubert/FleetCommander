@@ -8,6 +8,8 @@ title: Hotkeys, lock, title bars
 All of this is configurable in the web UI (mostly on the **Settings** page). It requires KWin (Plasma) and
 works while `fcwm web` or `fcwm watch` runs – except title bars, which keep working without fcwm.
 
+![The Settings page](/img/screenshots/settings-en.png)
+
 ## Hotkeys
 
 ```yaml
@@ -47,14 +49,11 @@ positions.
 
 ```yaml
 settings:
-  titlebar: {hide: false, color: "#2a6f97"}
-characters:
-  "Alt 1": {color: "#b42828"}
+  titlebar: {hide: true}
 ```
 
-Hide and/or color the title bars of all EVE clients, plus a color per character. Implemented as fcwm's own KWin
-window rules (`fcwm-…` in `~/.config/kwinrulesrc` – other rules are left alone) and small color schemes in
-`~/.local/share/color-schemes/FCWM-*.colors`. Works even when fcwm isn't running.
+Hide the title bars of all EVE clients. Implemented as fcwm's own KWin window rules (`fcwm-…` in
+`~/.config/kwinrulesrc` – other rules are left alone). Works even when fcwm isn't running.
 
 **Hiding/showing title bars realigns the clients** – otherwise the frame shrinks and leaves a gap at the top.
 

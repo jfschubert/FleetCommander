@@ -128,13 +128,18 @@ Then remove it: `sudo pacman -R fcwm` / `sudo apt remove fcwm` / `sudo dnf remov
 
 ## Releasing a new version
 
-The version is defined in `pyproject.toml`; the build scripts read it from there
-(`build-rpm.sh` passes it to the spec as `fcwm_version`, `build-deb.sh` adds a temporary
-changelog entry and warns if `debian/changelog` lags behind). Still bump these by hand so
-everything matches:
+Releases are built and published by GitHub Actions (`.github/workflows/release.yml`):
 
-- `pyproject.toml` – `version`
-- `fcwm/__init__.py` – `__version__` (shown by `fcwm --version`)
-- `packaging/arch/PKGBUILD` – `pkgver` (reset `pkgrel=1`)
-- `packaging/debian/changelog` – new top entry (`dch -v <ver>` or by hand)
-- `packaging/rpm/fcwm.spec` – the `fcwm_version` default and a `%changelog` entry
+```bash
+packaging/bump-version.sh 0.3.0 "Short changelog line"
+git commit -am "Release 0.3.0"
+git tag v0.3.0
+git push && git push origin v0.3.0
+```
+
+`bump-version.sh` sets the version in `pyproject.toml`, `fcwm/__init__.py`, the PKGBUILD (`pkgrel=1`),
+the RPM spec (default version + `%changelog`) and `debian/changelog`. The tag push then runs the tests,
+checks that all of these match the tag, builds the Arch package (`archlinux:base-devel`), the `.deb`
+(`debian:trixie`), the `.rpm` (`fedora:latest`) and wheel + sdist, and attaches them with a `SHA256SUMS`
+file and install instructions to a new GitHub release. Running the workflow by hand
+(Actions → release → Run workflow) only builds the packages as artifacts, without a release.

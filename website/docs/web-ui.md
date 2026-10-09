@@ -11,6 +11,8 @@ Start it with `fcwm web` (or run the systemd service) and open <http://127.0.0.1
 
 The language (Deutsch/English) is selected under **Settings → General** and remembered by the browser.
 
+![The layout editor with three monitors](/img/screenshots/layout-en.png)
+
 ## App window
 
 Prefer not to deal with a browser tab? `fcwm app` – or simply "FleetCommander" in the application menu – opens
@@ -33,7 +35,7 @@ The UI has three pages:
 
 - **Layout** (main page): profiles, the monitor preview with all slots, the character palette, the monitor
   cards, apply, auto placement and lock.
-- **Settings**: language, global hotkeys, title bars / separators / character colors, debug info (backend,
+- **Settings**: language, global hotkeys, title bars / separators, debug info (backend,
   versions, clients, monitors – with a copy button for bug reports), the config file with **reload** and
   **restart** buttons, and the web UI host/port (needs a restart).
 - **About**: version, links (documentation, GitHub, bug reports, license), credits, the legal notice – and how to
@@ -63,6 +65,8 @@ Longer help texts are behind small **i** info icons – hover over them to read 
 - Characters that aren't logged in can be planned via **Add character**.
 
 ## The slot menu (⚙)
+
+![The ⚙ menu of a slot](/img/screenshots/cell-menu-en.png)
 
 Every slot has a gear button **⚙** that opens its action menu. Which entries appear depends on the slot.
 

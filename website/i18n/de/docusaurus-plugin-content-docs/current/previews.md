@@ -1,21 +1,32 @@
 ---
 sidebar_position: 13
 title: Vorschauen
+sidebar_label: Vorschauen (experimentell)
 ---
 
 # Live-Vorschauen
+
+:::warning Experimentell / in Arbeit
+
+Vorschauen funktionieren, sind aber noch in Entwicklung: Verhalten, Optionen und Konfigurationsformat können
+sich ändern, und es gibt noch Ecken und Kanten (z. B. hält KWin die Vorschaufenster immer im Vordergrund).
+Rückmeldungen über [GitHub-Issues](https://github.com/jfschubert/FleetCommander/issues) sind willkommen.
+
+:::
 
 fcwm kann Live-Bilder deiner Clients zeigen, wie EVE-O Preview. Gerendert werden sie von KWin selbst
 (`WindowThumbnail`) – ohne Bildschirmaufnahme – und nur, solange `fcwm web` / `fcwm watch` läuft.
 
 ## Vorschau-Felder {#preview-slots}
 
+![Ein Vorschau-Feld (unten rechts) im Profil Fleet-Fight](/img/screenshots/fleet-fight-de.png)
+
 Ein frei gehaltenes Feld kann zum Vorschau-Feld werden (⚙ → Frei halten / für andere Fenster, dann ⚙ → Bearbeiten (Name, Fenster, Vorschau) → „Vorschau“):
 
 - `preview: all` – alle Clients,
 - `preview: hidden` – nur verdeckte Clients (hinten im Stapel bzw. minimiert).
 
-Das Feld zeigt die Clients als Kacheln mit Charakternamen (in der Titelleisten-Farbe); der aktive ist
+Das Feld zeigt die Clients als Kacheln mit Charakternamen; der aktive ist
 hervorgehoben, ein Klick wechselt zum Client.
 
 **Sichtbar** (`show`): `always` (Standard, wie EVE-O Preview – liegt dann auch über anderen Programmen) oder

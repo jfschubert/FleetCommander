@@ -79,6 +79,11 @@ def _js_regex(pattern: str) -> str:
     return pattern
 
 
+# Coloring title bars does not work reliably yet: hidden in the web UI and not applied. Configured colors
+# stay in the config; with this off, the next sync removes any color rules written earlier.
+COLORS_ENABLED = False
+
+
 def desired_rules(cfg: Config) -> dict[str, dict[str, str]]:
     """Rule ID -> keys/values. Character rules first (KWin applies the first matching one)."""
     tb = cfg.titlebar or {}
@@ -88,7 +93,7 @@ def desired_rules(cfg: Config) -> dict[str, dict[str, str]]:
 
     def props(color: str | None) -> dict[str, str]:
         p = {}
-        if color and _hex(color):
+        if COLORS_ENABLED and color and _hex(color):
             p.update(decocolor=_scheme(color), decocolorrule="2")
         if tb.get("hide"):
             p.update(noborder="true", noborderrule="2")
@@ -103,7 +108,7 @@ def desired_rules(cfg: Config) -> dict[str, dict[str, str]]:
                       "title": f"^EVE - {re.escape(char)}$", "titlematch": "3", **pr}
     pr = props(tb.get("color"))
     if pr:
-        rules[PREFIX + "all"] = {"Description": "FleetCommander: alle EVE-Clients", **base,
+        rules[PREFIX + "all"] = {"Description": "FleetCommander: all EVE clients", **base,
                                  "title": _js_regex(cfg.caption_re.pattern), "titlematch": "3", **pr}
     return rules
 

@@ -19,7 +19,6 @@ Schlüssel auf oberster Ebene:
 | `default_profile` | Profil, das verwendet wird, wenn keines angegeben ist. |
 | `profiles` | Benannte Layouts. |
 | `hotkeys` | Globale Kurzbefehle (nächstes/vorheriges Layout, Stapel durchschalten). |
-| `characters` | Optionen pro Charakter (Titelleisten-Farbe). |
 
 ## settings {#settings}
 
@@ -34,7 +33,7 @@ settings:
   gap: 0                   # Abstand zwischen Rasterzellen in Pixel
   decoration: {top: 0, right: 0, bottom: 0, left: 0}   # nur x11-Backend
   min_size: [1024, 768]    # Warnung, wenn ein Feld kleiner ist (EVE-Minimum)
-  titlebar: {hide: false, color: "#2a6f97"}
+  titlebar: {hide: false}
   separator: {width: 2, color: "#3c3c3c", show: always}
 ```
 
@@ -49,7 +48,7 @@ settings:
 | `gap` | `0` | Abstand zwischen Rasterzellen in Pixel. |
 | `decoration` | `0` | Grösse der Fensterdekoration. Nur für das `x11`-Backend, das die Client-Geometrie setzt; KWin setzt die Frame-Geometrie, dort wird nichts abgezogen. |
 | `min_size` | `[1024, 768]` | Warnung, wenn ein Feld kleiner ist. |
-| `titlebar` | `{hide: false, color: ""}` | Titelleisten aller EVE-Clients ausblenden und/oder einfärben – siehe [Titelleisten](hotkeys-appearance.md#title-bars). |
+| `titlebar` | `{hide: false}` | Titelleisten aller EVE-Clients ausblenden – siehe [Titelleisten](hotkeys-appearance.md#title-bars). |
 | `separator` | `{width: 0}` | Trennlinie zwischen Clients: `width` (0–20 px), `color`, `show: always\|eve` – siehe [Trennlinien](hotkeys-appearance.md#separators). |
 
 ### Adresse der Web-UI {#web-ui-address}
@@ -257,15 +256,6 @@ hotkeys:
 
 Qt-Schreibweise (z. B. `Meta+Ctrl+Right`). Profil- und Stapel-Kurzbefehle werden pro Profil gesetzt
 (`hotkey`, `stack_hotkeys`). Siehe [Kurzbefehle](hotkeys-appearance.md#hotkeys).
-
-## characters {#characters}
-
-```yaml
-characters:
-  "Alt 1": {color: "#b42828"}
-```
-
-Titelleisten-Farbe pro Charakter (auch für die Namen in Vorschauen).
 
 ## Rasterberechnung {#grid-calculation}
 

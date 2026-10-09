@@ -15,6 +15,8 @@ Clients freigeben** macht es wieder zu einem normalen Feld. Die Checkboxen im Ed
 unten: „Alle passenden Fenster stapeln“ (`stack`), „Auffang-Feld für neue Fenster“ mit „Nicht einfangen
 (Titel/Klasse, Regex)“ (`catch_all`, `exclude`) und „Fenstergrösse beibehalten“ (`resize: false`).
 
+![Frei gehaltene Felder für Browser und RIFT (schraffiert)](/img/screenshots/layout-de.png)
+
 ## Nur frei halten {#just-keep-free}
 
 ```yaml

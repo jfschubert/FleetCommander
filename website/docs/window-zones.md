@@ -15,6 +15,8 @@ turns it back into a normal slot. The editor's checkboxes map to the keys below:
 (`stack`), "Catch-all slot for new windows" with "Don't catch (title/class, regex)" (`catch_all`, `exclude`)
 and "Keep window size" (`resize: false`).
 
+![Kept-free slots for a browser and RIFT (striped)](/img/screenshots/layout-en.png)
+
 ## Just keep free
 
 ```yaml

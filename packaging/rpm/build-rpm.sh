@@ -30,7 +30,7 @@ src="$work/fcwm-$version"
 
 # same file selection as packaging/arch/PKGBUILD prepare() – no personal config.yaml/state
 mkdir -p "$src/packaging"
-cp -r "$top"/{fcwm,tests,pyproject.toml,README.md,README.de.md,config.example.yaml,LICENSE} "$src/"
+cp -r "$top"/{fcwm,tests,pyproject.toml,README.md,README.de.md,config.example.yaml,LICENSE,NOTICE} "$src/"
 cp "$top"/packaging/fcwm.{service,desktop} "$src/packaging/"
 find "$src" -name __pycache__ -type d -prune -exec rm -rf {} +
 

@@ -28,7 +28,7 @@ src="$work/fcwm-$version"
 
 # same file selection as packaging/arch/PKGBUILD prepare() – no personal config.yaml/state
 mkdir -p "$src/packaging" "$src/debian/source"
-cp -r "$top"/{fcwm,tests,pyproject.toml,README.md,README.de.md,config.example.yaml,LICENSE} "$src/"
+cp -r "$top"/{fcwm,tests,pyproject.toml,README.md,README.de.md,config.example.yaml,LICENSE,NOTICE} "$src/"
 cp "$top"/packaging/fcwm.{service,desktop} "$src/packaging/"
 cp "$here"/{control,rules,changelog,copyright,fcwm.install,fcwm.docs,postinst,prerm} "$src/debian/"
 cp "$here/source/format" "$src/debian/source/"
