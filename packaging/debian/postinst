@@ -1,0 +1,20 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+    if [ -z "$2" ]; then
+        cat <<'MSG'
+==> FleetCommander (fcwm) installed.
+    1. Create a starter config:    fcwm init
+    2. Start it with your session: systemctl --user enable --now fcwm
+       (or run `fcwm web` manually)
+    3. Open the web UI:            http://127.0.0.1:8765/  (or "FleetCommander" in the menu)
+MSG
+    else
+        echo "==> Restart the running instance to use the new version: fcwm restart"
+    fi
+fi
+
+#DEBHELPER#
+
+exit 0

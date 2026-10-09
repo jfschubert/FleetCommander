@@ -1,0 +1,3 @@
+packaging/fcwm.service usr/lib/systemd/user/
+packaging/fcwm.desktop usr/share/applications/
+fcwm/static/fcwm.svg usr/share/icons/hicolor/scalable/apps/

@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "remove" ]; then
+    cat <<'MSG'
+==> Before removing, as your user (not root):
+      systemctl --user disable --now fcwm
+      fcwm cleanup      # removes fcwm's KWin window rules, color schemes and shortcuts
+    Your config in ~/.config/fcwm/ is left untouched.
+MSG
+fi
+
+#DEBHELPER#
+
+exit 0

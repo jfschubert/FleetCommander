@@ -1,0 +1,18 @@
+{
+  "version.label": {
+    "message": "Next",
+    "description": "The label for version current"
+  },
+  "sidebar.docs.category.Getting started": {
+    "message": "Erste Schritte",
+    "description": "The label for category 'Getting started' in sidebar 'docs'"
+  },
+  "sidebar.docs.category.Using FleetCommander": {
+    "message": "FleetCommander verwenden",
+    "description": "The label for category 'Using FleetCommander' in sidebar 'docs'"
+  },
+  "sidebar.docs.category.Reference": {
+    "message": "Referenz",
+    "description": "The label for category 'Reference' in sidebar 'docs'"
+  }
+}

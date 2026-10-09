@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- FleetCommander – eigenes Icon (GPL-3.0): Schiffe in Formation im Photon-Stil -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b232c"/>
+      <stop offset="1" stop-color="#06080b"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".5" cy=".45" r=".5">
+      <stop offset="0" stop-color="#4fc3dc" stop-opacity=".30"/>
+      <stop offset="1" stop-color="#4fc3dc" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="22" fill="url(#bg)"/>
+  <rect x="4" y="4" width="120" height="120" rx="22" fill="url(#glow)"/>
+  <rect x="5" y="5" width="118" height="118" rx="21" fill="none" stroke="#9fd3f2" stroke-opacity=".35" stroke-width="2"/>
+  <circle cx="64" cy="66" r="42" fill="none" stroke="#9fd3f2" stroke-opacity=".28" stroke-width="1.6" stroke-dasharray="5 6"/>
+  <!-- Führungsschiff -->
+  <path d="M64 22 L82 62 L64 53 L46 62 Z" fill="#e3f5ff"/>
+  <!-- Flügelmänner -->
+  <path d="M35 56 L49 86 L35 79 L21 86 Z" fill="#8fcbec"/>
+  <path d="M93 56 L107 86 L93 79 L79 86 Z" fill="#8fcbec"/>
+  <!-- Nachhut -->
+  <path d="M64 76 L76 102 L64 96 L52 102 Z" fill="#4f8fb3"/>
+</svg>

@@ -1,0 +1,28 @@
+/* FleetCommander docs theme – a cool "EVE blue" accent. */
+:root {
+  --ifm-color-primary: #2a6f97;
+  --ifm-color-primary-dark: #266488;
+  --ifm-color-primary-darker: #245e80;
+  --ifm-color-primary-darkest: #1d4d6a;
+  --ifm-color-primary-light: #2e7aa6;
+  --ifm-color-primary-lighter: #3080ae;
+  --ifm-color-primary-lightest: #3891c4;
+  --ifm-code-font-size: 92%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #5fb0e0;
+  --ifm-color-primary-dark: #44a3db;
+  --ifm-color-primary-darker: #379cd8;
+  --ifm-color-primary-darkest: #2482ba;
+  --ifm-color-primary-light: #7abde5;
+  --ifm-color-primary-lighter: #87c4e8;
+  --ifm-color-primary-lightest: #afd7f0;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+table {
+  display: table;
+  width: 100%;
+}

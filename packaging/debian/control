@@ -1,0 +1,38 @@
+Source: fcwm
+Section: x11
+Priority: optional
+Maintainer: Jan-Frederic Schubert <jfschubert@gmail.com>
+Build-Depends: debhelper-compat (= 13),
+               dh-python,
+               pybuild-plugin-pyproject,
+               python3-all,
+               python3-setuptools (>= 77),
+               python3-wheel,
+               python3-yaml <!nocheck>,
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+Homepage: https://github.com/jfschubert/FleetCommander
+
+Package: fcwm
+Architecture: all
+Depends: ${misc:Depends},
+         ${python3:Depends},
+         python3-yaml,
+         python3-pyqt6.qtwebengine,
+         systemd,
+         kwin-wayland | kwin-x11,
+         libkf6config-bin,
+         libkscreen-bin,
+         xdg-utils,
+Recommends: python3-ruamel.yaml,
+Suggests: wmctrl,
+          xdotool,
+          x11-xserver-utils,
+Description: EVE Online window manager for KDE Plasma
+ FleetCommander (fcwm) arranges EVE Online client windows on KDE Plasma 6
+ (Wayland and X11): grid layouts, profiles, window stacks, global hotkeys
+ and live previews, controlled through a local web UI.
+ .
+ It talks to KWin via D-Bus (busctl) and KWin scripts, and uses
+ kwriteconfig6/kreadconfig6 and kscreen-doctor. An X11 fallback backend
+ without KWin uses wmctrl, xdotool and xrandr.

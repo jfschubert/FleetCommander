@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+# Build from a staged source tree (see build-deb.sh); debian/ must sit at its root.
+# dh-python + pybuild with the pyproject plugin build the wheel and install it into
+# debian/fcwm (python package + /usr/bin/fcwm entry point).
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	python3 -m unittest discover -s tests -v
+endif
+
+# keep README.md uncompressed: fcwm.service points to file:///usr/share/doc/fcwm/README.md
+override_dh_compress:
+	dh_compress -X.md -X.yaml

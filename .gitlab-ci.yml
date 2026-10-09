@@ -1,0 +1,37 @@
+# GitLab Pages for the Docusaurus documentation in website/.
+# The site URL and base path are derived from CI_PAGES_URL (or CI_PROJECT_* as a fallback);
+# set DOCS_URL / DOCS_BASE_URL as CI/CD variables to override them (e.g. for a custom domain).
+
+pages:
+  image: node:20
+  stage: deploy
+  cache:
+    key:
+      files: [website/package-lock.json]
+    paths: [website/.npm/]
+  script:
+    - |
+      if [ -z "$DOCS_URL" ]; then
+        if [ -n "$CI_PAGES_URL" ]; then
+          DOCS_URL=$(echo "$CI_PAGES_URL" | sed -E 's#^(https?://[^/]+).*#\1#')
+          DOCS_BASE_URL=${DOCS_BASE_URL:-$(echo "$CI_PAGES_URL" | sed -E 's#^https?://[^/]+##')/}
+        else
+          DOCS_URL="https://${CI_PROJECT_ROOT_NAMESPACE}.${CI_PAGES_DOMAIN}"
+          DOCS_BASE_URL=${DOCS_BASE_URL:-/${CI_PROJECT_NAME}/}
+        fi
+      fi
+      export DOCS_URL DOCS_BASE_URL
+      echo "Building docs for ${DOCS_URL}${DOCS_BASE_URL}"
+    - cd website
+    - npm ci --cache .npm --prefer-offline
+    - npm run build
+    - cd ..
+    - rm -rf public
+    - mv website/build public
+  artifacts:
+    paths: [public]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - website/**/*
+        - .gitlab-ci.yml
