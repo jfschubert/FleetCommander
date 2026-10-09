@@ -1,0 +1,250 @@
+import re
+import unittest
+from pathlib import Path
+
+from fcwm.backends.base import Window
+from fcwm.config import parse_text
+from fcwm.geometry import GridSpec, Insets, Rect, grid_cells, span_cells
+from fcwm.layout import make_plan
+from fcwm.monitors import Monitor
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+class GridTest(unittest.TestCase):
+    def test_2x2_no_pixel_loss(self):
+        cells = grid_cells(Rect(0, 0, 1921, 1081), GridSpec(2, 2))
+        self.assertEqual(cells[0], Rect(0, 0, 960, 540))
+        self.assertEqual(cells[3].x + cells[3].w, 1921)
+        self.assertEqual(cells[3].y + cells[3].h, 1081)
+
+    def test_gap_and_weights(self):
+        cells = grid_cells(Rect(100, 0, 1010, 100), GridSpec(2, 1, (2, 1)), gap=10)
+        self.assertEqual(cells, [Rect(100, 0, 667, 100), Rect(777, 0, 333, 100)])
+
+    def test_span(self):
+        g = GridSpec(2, 2)
+        cells = grid_cells(Rect(0, 0, 200, 200), g)
+        self.assertEqual(span_cells(cells, g, 0, (1, 2)), Rect(0, 0, 100, 200))
+        with self.assertRaises(ValueError):
+            span_cells(cells, g, 1, (2, 1))
+
+    def test_columns_per_row(self):
+        # Zeile 0 = 50:50, Zeile 1 = 75:25
+        g = GridSpec.parse({"cols": 2, "rows": 2, "row_col_weights": {1: [75, 25]}})
+        cells = grid_cells(Rect(0, 0, 400, 200), g)
+        self.assertEqual([c.w for c in cells], [200, 200, 300, 100])
+        self.assertEqual(cells[3].x, 300)
+        self.assertFalse(g.uniform)
+        self.assertTrue(GridSpec.parse({"cols": 2, "rows": 2, "row_col_weights": {1: [1, 1]}}).uniform)
+
+    def test_insets(self):
+        self.assertEqual(Insets.parse({"bottom": 44}).apply(Rect(0, 0, 100, 100)), Rect(0, 0, 100, 56))
+
+
+class PlanTest(unittest.TestCase):
+    def setUp(self):
+        p = ROOT / "tests" / "fixtures" / "config.yaml"
+        self.cfg = parse_text(p.read_text(), p)
+        self.mons = [Monitor("DP-5", Rect(0, 0, 2160, 3840)),
+                     Monitor("DP-1", Rect(2160, 1354, 3840, 2160), workarea=Rect(2160, 1354, 3840, 2116)),
+                     Monitor("DP-4", Rect(6000, 0, 2160, 3840))]
+
+    def win(self, i, title, cls="steam_app_8500"):
+        return Window(str(i), title, cls, i, Rect(0, 0, 10, 10))
+
+    def test_assign_fill_and_filter(self):
+        wins = [self.win(1, "EVE - Xondana Fulier"), self.win(2, "EVE - New Alt"),
+                self.win(3, "EVE Launcher"), self.win(4, "EVE - Foo - Brave", "brave-browser")]
+        plan = make_plan(self.cfg, "Solo-Mining", wins, self.mons)
+        got = {p.label for p in plan.placements}
+        # New Alt landet im ersten freien fill-Slot (left:0/1 sind für fehlende Chars reserviert)
+        self.assertEqual(got, {"Xondana Fulier@center:0", "New Alt@left:2"})
+        self.assertEqual(plan.placements[0].rect, Rect(2160, 1354, 3840, 2116))  # Panel abgezogen
+        self.assertIn("Lady Forever", plan.missing)
+
+    def test_decoration_for_client_geometry_backends(self):
+        self.cfg.decoration = Insets(30, 2, 2, 2)
+        plan = make_plan(self.cfg, "Solo-Mining", [self.win(1, "EVE - Xondana Fulier")], self.mons,
+                         frame_geometry=False)
+        self.assertEqual(plan.placements[0].rect, Rect(2162, 1384, 3836, 2084))
+
+
+
+class StackTest(PlanTest):
+    def test_pinned_stack_and_raise_order(self):
+        from fcwm.config import parse_profile
+        prof = parse_profile("Stack", {"assign": {"A": "center:0", "B": "center:0", "C": "left:0"}},
+                             self.cfg.monitors)
+        wins = [self.win(1, "EVE - A"), self.win(2, "EVE - B"), self.win(3, "EVE - C")]
+        plan = make_plan(self.cfg, prof, wins, self.mons)
+        rects = {p.char: p.rect for p in plan.placements}
+        self.assertEqual(rects["A"], rects["B"])
+        # B zuerst nach vorn, dann A -> A (erster Eintrag) liegt oben
+        self.assertEqual(plan.raise_order(), ["2", "1"])
+        self.assertEqual(plan.raise_order({"2"}), ["2"])
+
+    def test_overflow_stacks_round_robin(self):
+        from fcwm.config import parse_profile
+        prof = parse_profile("One", {"grids": {"center": "2x1"}, "fill": ["center"], "stack_overflow": True},
+                             self.cfg.monitors)
+        wins = [self.win(i, f"EVE - Alt{i}") for i in range(1, 6)]
+        plan = make_plan(self.cfg, prof, wins, self.mons)
+        got = {p.char: f"{p.monitor}:{p.slot}" for p in plan.placements}
+        self.assertEqual(got, {"Alt1": "center:0", "Alt2": "center:1", "Alt3": "center:0",
+                               "Alt4": "center:1", "Alt5": "center:0"})
+        self.assertEqual(plan.unplaced, [])
+
+
+class DisabledMonitorTest(PlanTest):
+    def test_disabled_monitor_gets_no_slots(self):
+        from fcwm.config import parse_profile
+        prof = parse_profile("D", {"assign": {"A": "left:0"}, "fill": ["left", "right"],
+                                   "disabled_monitors": ["left"]}, self.cfg.monitors)
+        plan = make_plan(self.cfg, prof, [self.win(1, "EVE - A"), self.win(2, "EVE - B")], self.mons)
+        self.assertNotIn("left", plan.layouts)
+        self.assertEqual(plan.disabled, ["left"])
+        got = {p.char: f"{p.monitor}:{p.slot}" for p in plan.placements}
+        self.assertEqual(got, {"A": "right:0", "B": "right:1"})   # A landet per fill auf right
+        self.assertTrue(any("left" in w for w in plan.warnings))
+
+    def test_overflow_stacks_by_default(self):
+        from fcwm.config import parse_profile
+        prof = parse_profile("O", {"grids": {"center": "1x1"}, "fill": ["center"]}, self.cfg.monitors)
+        plan = make_plan(self.cfg, prof, [self.win(i, f"EVE - X{i}") for i in range(3)], self.mons)
+        self.assertEqual({p.slot for p in plan.placements}, {0})
+        self.assertEqual(len(plan.placements), 3)
+
+
+class BlockedCellTest(PlanTest):
+    def test_blocked_cell_is_skipped_and_hosts_other_window(self):
+        from fcwm.config import parse_profile
+        prof = parse_profile("B", {"grids": {"center": "2x1"}, "fill": ["center"],
+                                   "blocked": {"center:1": {"label": "RIFT", "match": "^rift"}}},
+                             self.cfg.monitors)
+        wins = [self.win(1, "EVE - A"), self.win(2, "EVE - B"), self.win(3, "RIFT Intel", "java")]
+        plan = make_plan(self.cfg, prof, wins, self.mons)
+        self.assertEqual({p.slot for p in plan.placements}, {0})      # beide auf Slot 0 gestapelt
+        self.assertEqual([(p.window.id, p.slot) for p in plan.extra], [("3", 1)])
+        self.assertEqual(plan.blocked[0]["window"], "RIFT Intel")
+
+    def test_preview_cell(self):
+        from fcwm.config import model_to_raw, parse_profile, profile_to_model
+        prof = parse_profile("P", {"grids": {"center": "2x1"}, "fill": ["center"],
+                                   "blocked": {"center:1": {"label": "Alts", "preview": "hidden", "match": "x"}}},
+                             self.cfg.monitors)
+        plan = make_plan(self.cfg, prof, [self.win(1, "EVE - A"), self.win(2, "EVE - B")], self.mons)
+        self.assertEqual({p.slot for p in plan.placements}, {0})          # Vorschau-Feld bleibt frei
+        self.assertEqual(plan.blocked[0]["preview"], "hidden")
+        self.assertEqual(plan.blocked[0]["match"], "")                    # Vorschau schliesst Fenster-Muster aus
+        raw = model_to_raw(self.cfg, profile_to_model(self.cfg, prof))
+        self.assertEqual(raw["blocked"], {"center:1": {"label": "Alts", "preview": "hidden"}})
+
+    def test_stack_preview_strip(self):
+        from fcwm.config import model_to_raw, parse_profile, profile_to_model
+        prof = parse_profile("SP", {"grids": {"center": "1x1"},
+                                    "stack_previews": {"center:0": {"mode": "stack", "edge": "right", "size": 20}}},
+                             self.cfg.monitors)
+        plan = make_plan(self.cfg, prof, [], self.mons)
+        sp = plan.stack_previews[0]
+        self.assertEqual(sp["stack"], [2160, 1354, 3840, 2116])
+        self.assertEqual(sp["rect"], [2160 + 3840 - 768, 1354, 768, 2116])   # 20 % rechts
+        raw = model_to_raw(self.cfg, profile_to_model(self.cfg, prof))
+        self.assertEqual(raw["stack_previews"], {"center:0": {"mode": "stack", "edge": "right", "size": 20}})
+
+    def test_blocked_roundtrip(self):
+        from fcwm.config import model_to_raw, parse_profile, profile_to_model
+        prof = parse_profile("B", {"blocked": {"left:2": "Browser", "right:3": {"label": "RIFT", "match": "rift"}}},
+                             self.cfg.monitors)
+        raw = model_to_raw(self.cfg, profile_to_model(self.cfg, prof))
+        self.assertEqual(raw["blocked"], {"left:2": "Browser", "right:3": {"label": "RIFT", "match": "rift"}})
+
+
+class SubgridTest(PlanTest):
+    def prof(self, **extra):
+        from fcwm.config import parse_profile
+        base = {"grids": {"center": "2x1"}, "subgrids": {"center:1": "2x2"}, "fill": ["center"]}
+        base.update(extra)
+        return parse_profile("Sub", base, self.cfg.monitors)
+
+    def test_subgrid_cells_and_fill_order(self):
+        wins = [self.win(i, f"EVE - Alt{i}") for i in range(1, 6)]
+        plan = make_plan(self.cfg, self.prof(), wins, self.mons)
+        got = {p.char: (p.slot, p.sub) for p in plan.placements}
+        # Slot 0 normal, Slot 1 in 4 kleine Zellen geteilt -> 5 Plätze
+        self.assertEqual(got, {"Alt1": (0, None), "Alt2": (1, 0), "Alt3": (1, 1), "Alt4": (1, 2), "Alt5": (1, 3)})
+        small = next(p.rect for p in plan.placements if p.char == "Alt2")
+        self.assertEqual(small, Rect(2160 + 1920, 1354, 960, 1058))
+
+    def test_pin_block_and_stack_in_subgrid(self):
+        prof = self.prof(assign={"Main": "center:0", "Scout": "center:1.3", "Scout2": "center:1.3"},
+                         blocked={"center:1.0": "RIFT"}, fill=["center"])
+        wins = [self.win(1, "EVE - Main"), self.win(2, "EVE - Scout"), self.win(3, "EVE - Scout2"),
+                self.win(4, "EVE - Alt")]
+        plan = make_plan(self.cfg, prof, wins, self.mons)
+        got = {p.char: (p.slot, p.sub) for p in plan.placements}
+        self.assertEqual(got["Scout"], (1, 3))
+        self.assertEqual(got["Scout2"], (1, 3))
+        self.assertEqual(got["Alt"], (1, 1))           # 1.0 ist frei gehalten
+        self.assertEqual(plan.raise_order(), ["3", "2"])
+
+    def test_subgrid_roundtrip(self):
+        from fcwm.config import model_to_raw, profile_to_model
+        prof = self.prof(assign={"Scout": "center:1.3"}, blocked={"center:1.0": "RIFT"},
+                         subgrids={"center:1": {"cols": 2, "rows": 2, "col_weights": [3, 1]}})
+        raw = model_to_raw(self.cfg, profile_to_model(self.cfg, prof))
+        self.assertEqual(raw["assign"], {"Scout": "center:1.3"})
+        self.assertEqual(raw["blocked"], {"center:1.0": "RIFT"})
+        self.assertEqual(raw["subgrids"], {"center:1": {"cols": 2, "rows": 2, "col_weights": [3.0, 1.0]}})
+
+
+class OverflowTest(PlanTest):
+    def test_overflow_cells_with_max(self):
+        from fcwm.config import parse_profile
+        prof = parse_profile("O", {"grids": {"center": "3x1"}, "fill": ["center"],
+                                   "overflow": [{"cell": "center:1", "max": 2}, "center:2"]},
+                             self.cfg.monitors)
+        wins = [self.win(i, f"EVE - Alt{i}") for i in range(1, 7)]
+        plan = make_plan(self.cfg, prof, wins, self.mons)
+        got = {p.char: p.slot for p in plan.placements}
+        # Slot 0 normal, 1 und 2 sind Überlauf -> nicht für normales Auffüllen
+        self.assertEqual(got, {"Alt1": 0, "Alt2": 1, "Alt3": 1, "Alt4": 2, "Alt5": 2, "Alt6": 2})
+        self.assertEqual([(o["order"], o["max"], o["count"]) for o in plan.overflow], [(1, 2, 2), (2, None, 3)])
+
+    def test_overflow_roundtrip_drops_max_on_last(self):
+        from fcwm.config import model_to_raw, parse_profile, profile_to_model
+        prof = parse_profile("O", {"overflow": [{"cell": "center:0", "max": 2}, {"cell": "left:1.2", "max": 5}]},
+                             self.cfg.monitors)
+        raw = model_to_raw(self.cfg, profile_to_model(self.cfg, prof))
+        self.assertEqual(raw["overflow"], [{"cell": "center:0", "max": 2}, "left:1.2"])
+
+
+class SeparatorTest(unittest.TestCase):
+    def test_lines_only_between_touching_windows(self):
+        from fcwm.separators import compute_lines
+        gap = 2
+        a = Rect(0, 0, 99, 100)          # links oben
+        b = Rect(101, 0, 99, 100)        # rechts daneben (Lücke 2)
+        c = Rect(0, 102, 200, 50)        # darunter über die volle Breite
+        d = Rect(500, 0, 50, 50)         # weit weg -> keine Linie
+        lines = compute_lines([a, b, c, d, Rect(0, 0, 99, 100)], gap)   # Duplikat (Stapel) zählt einmal
+        self.assertEqual(lines, [[0, 100, 99, 2], [99, 0, 2, 100], [101, 100, 99, 2]])
+        self.assertEqual(compute_lines([a, b], 0), [])
+        from fcwm.separators import line_pairs
+        self.assertEqual(line_pairs([a, b], gap), [([99, 0, 2, 100], [0, 0, 99, 100], [101, 0, 99, 100])])
+
+
+class StableFillTest(PlanTest):
+    def test_existing_auto_client_keeps_its_slot(self):
+        # "Zed" sitzt schon auf left:2; ein neuer, alphabetisch früherer Client darf ihn nicht verdrängen
+        zed = self.win(1, "EVE - Zed")
+        zed.geometry = Rect(0, 1920, 1080, 1920)          # = left:2 im 2x2-Raster
+        new = self.win(2, "EVE - Aaron")
+        plan = make_plan(self.cfg, "Solo-Mining", [zed, new], self.mons, keep_ids={"1"})
+        got = {p.char: f"{p.monitor}:{p.slot}" for p in plan.placements}
+        # left:3 ist im Beispielprofil frei gehalten -> Aaron springt auf den nächsten freien Slot
+        self.assertEqual(got, {"Zed": "left:2", "Aaron": "right:2"})
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,26 @@
+post_install() {
+    cat <<'MSG'
+==> FleetCommander (fcwm) installed.
+    1. Create a starter config:    fcwm init
+    2. Start it with your session: systemctl --user enable --now fcwm
+       (or run `fcwm web` manually)
+    3. Open the web UI:            http://127.0.0.1:8765/  (or "FleetCommander" in the menu)
+
+    Coming from evewm? Your ~/.config/evewm is copied to ~/.config/fcwm on first start, and
+    old evewm window rules/shortcuts are cleaned up. Switch the service:
+      systemctl --user disable --now evewm;  systemctl --user enable --now fcwm
+MSG
+}
+
+post_upgrade() {
+    echo "==> Restart the running instance to use the new version: fcwm restart"
+}
+
+pre_remove() {
+    cat <<'MSG'
+==> Before removing, as your user (not root):
+      systemctl --user disable --now fcwm
+      fcwm cleanup      # removes fcwm's KWin window rules, color schemes and shortcuts
+    Your config in ~/.config/fcwm/ is left untouched.
+MSG
+}

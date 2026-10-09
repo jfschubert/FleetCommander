@@ -1,0 +1,15 @@
+[Unit]
+Description=FleetCommander (web UI, auto placement, hotkeys, previews)
+Documentation=file:///usr/share/doc/fcwm/README.md
+# Läuft mit der grafischen Sitzung (Plasma) und endet mit ihr – beim Beenden entlädt fcwm
+# seine KWin-Skripte und gibt die globalen Kurzbefehle frei.
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/fcwm web
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

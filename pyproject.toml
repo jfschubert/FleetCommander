@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fcwm"
+version = "0.2.0"
+description = "EVE Online window manager for KDE Plasma (Wayland and X11): grid layouts, profiles, stacks, hotkeys, live previews"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{name = "Jan-Frederic Schubert"}]
+
+requires-python = ">=3.10"
+dependencies = ["pyyaml>=6"]
+
+[project.urls]
+Homepage = "https://github.com/jfschubert/FleetCommander"
+
+[project.optional-dependencies]
+roundtrip = ["ruamel.yaml"]   # Kommentare in config.yaml beim Speichern aus der Web-UI erhalten
+
+[project.scripts]
+fcwm = "fcwm.cli:main"
+
+[tool.setuptools]
+packages = ["fcwm", "fcwm.backends"]
+
+[tool.setuptools.package-data]
+fcwm = ["static/*.html"]
